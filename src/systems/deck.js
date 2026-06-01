@@ -146,7 +146,8 @@ function renderHand(animSlot=-1) {
     if(!canUse) div.classList.add('disabled');
     const rarDef=RARITIES[rar];
     const displayMana = (id==='meat') ? (activeBuffs.has('cook2') ? 1 : activeBuffs.has('cook') ? 2 : def.mana) : (id==='dice' && activeBuffs.has('cowhand')) ? 0 : def.mana;
-    div.innerHTML=`<span class="card-key">${i+1}</span><div class="card-icon">${def.icon}</div><div class="card-name">${def.name}</div><div class="card-mana">💧 ${displayMana}</div><div class="card-rarity rarity-label-${rar}">${rarDef.label}</div><div class="card-discard-hint">▶ dir: descartar</div>`;
+    const discardHint = IS_MOBILE ? '⏳ segure p/ descartar' : '▶ dir / segure: descartar';
+    div.innerHTML=`<span class="card-key">${i+1}</span><div class="card-icon">${def.icon}</div><div class="card-name">${def.name}</div><div class="card-mana">💧 ${displayMana}</div><div class="card-rarity rarity-label-${rar}">${rarDef.label}</div><div class="card-discard-hint">${discardHint}</div>`;
     div.onclick=()=>useCardSlot(i);
     div.addEventListener('contextmenu', (e)=>{ e.preventDefault(); discardCard(i); });
     area.appendChild(div);
