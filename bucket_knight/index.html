@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bucket Knight</title>
+  <link rel="stylesheet" href="./styles/main.css">
+</head>
+<body>
+
+<canvas id="c"></canvas>
+
+<div id="main-menu">
+  <div class="menu-gold-display" id="menu-gold-disp">🪙 0</div>
+  <div id="menu-title">⚔ DUNGEON KNIGHT</div>
+  <div id="menu-subtitle">CARD EDITION</div>
+  <button class="menu-btn" onclick="startGame()">▶ JOGAR</button>
+  <div id="deck-warning-msg" style="color:#ff4444;font-size:12px;font-family:'Courier New',monospace;text-align:center;margin-top:-8px;margin-bottom:4px;opacity:0;transition:opacity 0.4s;letter-spacing:1px;"></div>
+  <button class="menu-btn" onclick="openDeckScreen()">🂠 VER BARALHO</button>
+  <button class="menu-btn" onclick="openShopScreen()">🪙 LOJA</button>
+  <button class="menu-btn" onclick="openArtifactScreen()">🧿 ARTEFATOS</button>
+  <button class="menu-btn" onclick="openOptionsScreen()">⚙ OPÇÕES</button>
+</div>
+
+<!-- TELA DE BARALHO -->
+<div id="deck-screen">
+  <h2>🂠 BARALHO</h2>
+  <div class="sub">Arraste cartas e artefatos para equipar nos slots</div>
+  <button class="player-buff-btn" onclick="openPlayerBuffScreen()">❤️ BUFFS DO PLAYER</button>
+
+  <!-- Linha superior: Deck de cartas | Slots de artefatos -->
+  <div class="deck-top-row">
+    <div class="deck-top-col">
+      <div class="deck-section-title">🂠 DECK (5 CARTAS)</div>
+      <div class="deck-slots" id="deck-slot-area"></div>
+      <div class="deck-section-title" style="margin-top:10px">ESPECIAL</div>
+      <div id="deck-special-area" style="display:flex;flex-direction:column;align-items:center;gap:6px"></div>
+    </div>
+    <div class="deck-top-col">
+      <div class="deck-section-title">🧿 ARTEFATOS (5 SLOTS)</div>
+      <div id="deck-artifact-slots" class="deck-artifact-slots-equip"></div>
+    </div>
+  </div>
+
+  <!-- Linha inferior: Coleção de cartas | Coleção de artefatos -->
+  <div class="deck-bottom-row">
+    <div class="deck-bottom-col">
+      <div class="deck-section-title">COLEÇÃO DE CARTAS</div>
+      <div class="collection-grid" id="collection-area"></div>
+    </div>
+    <div class="deck-bottom-col">
+      <div class="deck-section-title">🎒 COLEÇÃO DE ARTEFATOS</div>
+      <div id="deck-artifact-collection" class="deck-artifact-coll-grid"></div>
+    </div>
+  </div>
+
+  <button class="back-btn" onclick="closeDeckScreen()">← VOLTAR</button>
+</div>
+
+<!-- TELA DE ARTEFATOS -->
+<div id="artifact-screen">
+  <h2>🧿 ARTEFATOS</h2>
+  <div class="sub">Abra baús para obter artefatos — equipe-os na tela de Baralho</div>
+  <div id="artifact-shop-gold">🪙 0</div>
+
+  <div style="display:flex;gap:28px;flex-wrap:wrap;justify-content:center;margin-top:12px">
+    <!-- Baús -->
+    <div>
+      <div class="deck-section-title">🗃 COMPRAR BAÚS</div>
+      <div style="display:flex;flex-direction:column;gap:10px;margin-top:8px">
+        <div class="chest-card" onclick="buyChest()">
+          <div style="font-size:34px">📦</div>
+          <div style="font-size:11px;font-weight:bold;color:#ffdd88;margin-top:4px">BAUZINHO</div>
+          <div style="font-size:10px;color:#aaa;margin-top:2px">Artefato aleatório</div>
+          <div style="font-size:11px;color:#ffd700;margin-top:6px;font-weight:bold">🪙 200</div>
+        </div>
+      </div>
+      <div id="chest-result-msg" style="margin-top:10px;min-height:28px;font-size:11px;text-align:center;color:#aaddaa"></div>
+    </div>
+
+    <!-- Álbum completo de Artefatos -->
+    <div>
+      <div class="deck-section-title">📖 ÁLBUM DE ARTEFATOS</div>
+      <div id="artifact-collection-grid" style="display:flex;flex-wrap:wrap;gap:8px;max-width:520px;margin-top:8px;justify-content:flex-start"></div>
+    </div>
+  </div>
+
+  <button class="back-btn" onclick="closeArtifactScreen()">← VOLTAR</button>
+</div>
+
+<!-- MODAL DE ABERTURA DE BAÚ -->
+<div id="chest-open-overlay" style="display:none;position:fixed;inset:0;z-index:200;align-items:center;justify-content:center;flex-direction:column;">
+  <div id="chest-blur-bg" style="position:absolute;inset:0;background:rgba(4,2,12,0.82);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);"></div>
+  <!-- Baú clicável -->
+  <div id="chest-click-zone" style="position:relative;z-index:201;display:flex;flex-direction:column;align-items:center;cursor:pointer;user-select:none;" onclick="chestClick()">
+    <div id="chest-emoji" style="font-size:96px;line-height:1;filter:drop-shadow(0 0 24px #aa44ff88);transition:transform 0.08s;">📦</div>
+    <div id="chest-click-label" style="margin-top:18px;font-family:'Courier New',monospace;color:#cc99ff;font-size:13px;letter-spacing:2px;text-shadow:0 0 10px #cc99ff88;">CLIQUE PARA ABRIR</div>
+    <div id="chest-clicks-left" style="margin-top:6px;font-family:'Courier New',monospace;color:#665577;font-size:10px;letter-spacing:1px;"></div>
+  </div>
+  <!-- Resultado (aparece após abertura) -->
+  <div id="chest-reveal" style="position:relative;z-index:201;display:none;flex-direction:column;align-items:center;gap:10px;">
+    <div id="chest-reveal-burst" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none;"></div>
+    <div id="chest-reveal-icon" style="font-size:80px;line-height:1;"></div>
+    <div id="chest-reveal-name" style="font-family:'Courier New',monospace;font-size:17px;font-weight:bold;color:#e0e0ff;letter-spacing:1px;text-align:center;"></div>
+    <div id="chest-reveal-rarity" style="font-family:'Courier New',monospace;font-size:13px;letter-spacing:3px;font-weight:bold;"></div>
+    <div id="chest-reveal-new-badge" style="font-family:'Courier New',monospace;font-size:11px;color:#88ff88;letter-spacing:2px;display:none;">✦ NOVO ARTEFATO ✦</div>
+    <!-- Barra de duplicata -->
+    <div id="chest-reveal-dupe-block" style="display:none;flex-direction:column;align-items:center;gap:4px;width:220px;">
+      <div id="chest-reveal-dupe-label" style="font-family:'Courier New',monospace;font-size:10px;color:#aa88cc;letter-spacing:1px;"></div>
+      <div style="width:220px;height:8px;background:#1a1a2e;border-radius:4px;overflow:hidden;border:1px solid #333366;">
+        <div id="chest-reveal-bar-fill" style="height:100%;width:0%;border-radius:4px;transition:none;"></div>
+      </div>
+      <div id="chest-reveal-bar-label" style="font-family:'Courier New',monospace;font-size:9px;color:#667;"></div>
+    </div>
+    <button onclick="closeChestOverlay()" style="margin-top:14px;background:transparent;border:1px solid #7744aa;color:#cc99ff;font-family:'Courier New',monospace;font-size:12px;letter-spacing:2px;padding:8px 28px;cursor:pointer;border-radius:6px;transition:border-color 0.15s,color 0.15s;" onmouseover="this.style.borderColor='#cc88ff';this.style.color='#ffffff'" onmouseout="this.style.borderColor='#7744aa';this.style.color='#cc99ff'">FECHAR</button>
+  </div>
+</div>
+
+<!-- LOJA -->
+<div id="shop-screen">
+  <h2>🪙 LOJA</h2>
+  <div class="sub">Compre novas cartas para expandir seu baralho</div>
+  <div id="shop-gold">🪙 0</div>
+  <div class="shop-grid" id="shop-grid"></div>
+  <button class="back-btn" onclick="closeShopScreen()">← VOLTAR</button>
+</div>
+
+<div id="ui" style="display:none">
+  <div id="hp-display" style="display:none">❤❤❤❤</div>
+  <div id="gold-display" style="display:none">🪙 0</div>
+  <div id="effect-display"></div>
+  <div id="roll-display" style="display:none">ROLL: pronto</div>
+  <div id="arrows-display"></div>
+  <div id="mana-bar" style="display:none"></div>
+  <div id="deck-display" style="display:none"></div>
+
+  <div id="dungeon-display" style="position:absolute;top:12px;left:50%;transform:translateX(-50%);color:#aaaaff;font-size:13px;font-family:'Courier New',monospace;letter-spacing:2px;text-align:center;pointer-events:none;"></div>
+  <div id="kill-bar-wrap" style="position:absolute;top:32px;left:50%;transform:translateX(-50%);width:180px;pointer-events:none;">
+    <div style="width:180px;height:8px;background:#1a1a2e;border:1px solid #333366;border-radius:4px;">
+      <div id="kill-bar-fill" style="height:100%;width:0%;background:#4488ff;border-radius:4px;transition:width 0.2s;"></div>
+    </div>
+    <div id="kill-bar-label" style="color:#555588;font-size:9px;text-align:center;margin-top:2px;">0 / 0 inimigos</div>
+  </div>
+
+  <div id="hud-bottom">
+    <div id="hud-info-bar">
+      <div id="hud-left">
+        <div id="roll-bar-wrap">
+          <div id="roll-bar-bg"><div id="roll-bar-fill"></div></div>
+        </div>
+        <div id="mana-charge-bar-wrap">
+          <div id="mana-charge-bar-bg"><div id="mana-charge-bar-fill"></div></div>
+        </div>
+        <div id="mana-pips"></div>
+      </div>
+      <div id="hud-center">
+        <div id="gold-display-hud">🪙 0</div>
+        <div id="discard-count-display" style="
+          font-size:13px;
+          font-family:'Courier New',monospace;
+          font-weight:bold;
+          color:#cccccc;
+          margin-top:4px;
+          letter-spacing:1px;
+          background:rgba(0,0,0,0.5);
+          border:1px solid #444466;
+          border-radius:6px;
+          padding:3px 8px;
+        ">🗑️ 5/5</div>
+      </div>
+      <div id="hud-right">
+        <div id="hp-display-new"></div>
+      </div>
+    </div>
+    <div id="hud-cards-row">
+      <div id="next-cards-panel">
+        <div id="next-cards-label">A SEGUIR</div>
+        <div id="next-cards-list"></div>
+      </div>
+      <div id="cards-area"></div>
+      <div id="special-card-slot" style="display:none">
+        <div id="special-card" class="not-ready">
+          <div id="special-card-icon">🌑</div>
+          <div id="special-card-name">MAGIA NEGRA</div>
+        </div>
+        <div id="special-charge-bar-wrap">
+          <div id="special-charge-bar-bg"><div id="special-charge-bar-fill"></div></div>
+        </div>
+        <div id="special-charge-label">0 / 50</div>
+        <div id="special-key-hint">[Q]</div>
+      </div>
+    </div>
+  </div>
+  <div id="buff-active-list"></div>
+  <div id="buff-screen">
+    <h2>✨ ESCOLHA UM BUFF</h2>
+    <p id="buff-dungeon-label">Dungeon completada!</p>
+    <div id="buff-choices"></div>
+  </div>
+  <div id="gameover">
+    <h1>☠ GAME OVER</h1>
+    <p style="color:#aaa;font-size:14px">O cavaleiro caiu...</p>
+    <p id="gameover-gold" style="color:#ffd700;font-size:18px;margin-top:8px;">🪙 0 moedas coletadas</p>
+    <button id="revive-btn" onclick="revivePlayer()" style="background:#0a1a0a;border:2px solid #44ff88;color:#44ff88;font-family:'Courier New',monospace;font-size:16px;padding:10px 28px;cursor:pointer;border-radius:4px;margin-top:10px;">💚 REVIVER (1 vez)</button>
+    <button onclick="restartGame()">↺ JOGAR NOVAMENTE</button>
+  </div>
+</div>
+
+<!-- Tooltip -->
+<div id="card-tooltip" style="display:none;position:fixed;z-index:999;background:#0e0e1e;border:1px solid #4a4a8a;border-radius:6px;padding:10px 14px;color:#e0e0ff;font-family:'Courier New',monospace;pointer-events:none;max-width:220px;box-shadow:0 4px 20px #000a;">
+  <div id="tt-name" style="font-size:13px;font-weight:bold;margin-bottom:4px;"></div>
+  <div id="tt-rarity" style="font-size:10px;margin-bottom:6px;"></div>
+  <div id="tt-desc" style="font-size:10px;color:#9999bb;line-height:1.5;"></div>
+</div>
+
+<!-- Modal de carta -->
+<div id="card-modal-overlay">
+  <div id="card-modal">
+    <span class="modal-close-x" onclick="closeCardModal()">✕</span>
+    <div class="modal-icon" id="modal-icon">⚔️</div>
+    <div class="modal-name" id="modal-name">ESPADA</div>
+    <div class="modal-rarity" id="modal-rarity"></div>
+    <div class="modal-mana" id="modal-mana">💧 2 mana</div>
+    <div class="modal-desc" id="modal-desc"></div>
+    <div id="modal-upgrade-block" style="display:none;margin-bottom:14px;">
+      <div class="upgrade-stars" id="modal-stars" style="color:#ff2288"></div>
+      <div class="upgrade-info" id="modal-upgrade-info"></div>
+    </div>
+    <div class="modal-actions" id="modal-actions"></div>
+  </div>
+</div>
+
+<!-- Modal de artefato -->
+<div id="artifact-modal-overlay">
+  <div id="artifact-modal">
+    <span class="modal-close-x" onclick="closeArtifactModal()">✕</span>
+    <div class="modal-icon" id="art-modal-icon">🧿</div>
+    <div class="modal-name" id="art-modal-name"></div>
+    <div class="modal-rarity" id="art-modal-rarity"></div>
+    <div class="modal-desc" id="art-modal-desc"></div>
+    <div id="art-modal-upgrade-block" style="display:none;margin-bottom:14px;">
+      <div class="upgrade-stars" id="art-modal-stars" style="color:#ffcc44"></div>
+      <div class="upgrade-info" id="art-modal-upgrade-label" style="color:#aaddff"></div>
+      <div id="art-modal-progress" style="margin:6px 0 10px"></div>
+      <div id="art-modal-level-table"></div>
+    </div>
+    <div class="modal-actions" id="art-modal-actions"></div>
+  </div>
+</div>
+
+<!-- TELA DE OPÇÕES -->
+<div id="options-screen">
+  <h2>⚙ OPÇÕES</h2>
+  <div class="options-section">
+    <div class="options-label">ÁUDIO</div>
+    <button id="options-sound-btn" class="options-toggle-btn" onclick="toggleOptionsSound()">🔊 Som: LIGADO</button>
+  </div>
+  <div class="options-section">
+    <div class="options-label">DADOS</div>
+    <button class="options-toggle-btn options-danger-btn" onclick="openEraseConfirm()">🗑 Apagar Dados</button>
+  </div>
+  <button class="back-btn" onclick="closeOptionsScreen()">← VOLTAR</button>
+</div>
+
+<!-- Modal de confirmação de apagar dados -->
+<div id="erase-confirm-overlay">
+  <div id="erase-confirm-modal">
+    <div style="font-size:36px;margin-bottom:12px">⚠️</div>
+    <div style="font-size:15px;font-weight:bold;letter-spacing:2px;margin-bottom:10px;color:#ff6666">APAGAR DADOS?</div>
+    <div style="font-size:11px;color:#888899;line-height:1.7;margin-bottom:24px">
+      Seu ouro, cartas compradas, artefatos e upgrades serão apagados.<br>
+      <span style="color:#556655">As cartas iniciais (Espada, Carne, Pistola,<br>Poção de Velocidade e Machado) serão mantidas.</span>
+    </div>
+    <div style="display:flex;gap:12px;justify-content:center">
+      <button class="erase-btn erase-confirm" onclick="eraseData()">✓ SIM, APAGAR</button>
+      <button class="erase-btn erase-cancel" onclick="closeEraseConfirm()">✕ CANCELAR</button>
+    </div>
+  </div>
+</div>
+
+<!-- TELA DE PAUSE (em jogo) -->
+<div id="pause-screen">
+  <div id="pause-modal">
+    <div id="pause-title">⏸ PAUSADO</div>
+    <div id="pause-hint">Backspace para continuar</div>
+    <div id="pause-actions">
+      <button class="pause-btn" onclick="resumeFromPause()">▶ CONTINUAR</button>
+      <button id="pause-sound-btn" class="pause-btn pause-sound" onclick="togglePauseSound()">🔊 Desativar som</button>
+      <button class="pause-btn pause-menu" onclick="pauseBackToMenu()">⌂ VOLTAR AO MENU</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal de árvore de buffs -->
+<div id="buff-tree-overlay">
+  <div id="buff-tree-modal">
+    <span class="modal-close-x" onclick="closeBuffTreeModal()">✕</span>
+    <div id="buff-tree-title" class="buff-tree-modal-title">🌿 ÁRVORE DE BUFFS</div>
+    <div id="buff-tree-container"></div>
+    <button class="back-btn" style="margin:18px 0 0" onclick="closeBuffTreeModal()">← FECHAR</button>
+  </div>
+</div>
+
+<!-- Modal de buffs do player -->
+<div id="player-buff-overlay">
+  <div id="player-buff-modal">
+    <span class="modal-close-x" onclick="closePlayerBuffScreen()">✕</span>
+    <div class="buff-tree-modal-title">❤️ BUFFS DO PLAYER</div>
+    <div class="pbuff-subtitle">Buffs de vida e mana desbloqueados ao completar dungeons</div>
+    <div id="player-buff-content"></div>
+    <button class="back-btn" style="margin:18px 0 0" onclick="closePlayerBuffScreen()">← FECHAR</button>
+  </div>
+</div>
+
+<!-- Módulos do jogo (ordem importa: dependências primeiro) -->
+<script src="./src/canvas.js"></script>
+<script src="./src/systems/state.js"></script>
+<script src="./src/systems/constants.js"></script>
+<script src="./src/systems/audio.js"></script>
+<script src="./src/systems/buffs.js"></script>
+<script src="./src/menu.js"></script>
+<script src="./src/systems/deck.js"></script>
+<script src="./src/systems/enemies.js"></script>
+<script src="./src/systems/combat.js"></script>
+<script src="./src/systems/particles.js"></script>
+<script src="./src/systems/ui.js"></script>
+<script src="./src/systems/wave.js"></script>
+<script src="./src/gameloop.js"></script>
+<script>
+  // Preload sniper images
+  window._sniperImg = new Image();
+  window._sniperImg.src = './assets/Sniper_no_scope.png';
+  window._sniperMiraImg = new Image();
+  window._sniperMiraImg.src = './assets/Mira.png';
+  window._sniperBalaImg = new Image();
+  window._sniperBalaImg.src = './assets/Bala_da_sniper.png';
+
+  // Preload Glitch Fury images
+  window._placaImg = new Image();
+  window._placaImg.src = './assets/Placa.png';
+  ['G_message1','G_message2','G_message3','G_message4','G_message5'].forEach(key => {
+    window['_glitchImg_' + key] = new Image();
+    window['_glitchImg_' + key].src = './assets/' + key + '.png';
+  });
+</script>
+</body>
+</html>
