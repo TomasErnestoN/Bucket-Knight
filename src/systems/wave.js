@@ -186,6 +186,8 @@ function finishDungeonTransition(){
   // Reconstrói a mão ao entrar na nova dungeon
   buildHand();
   setTimeout(() => { if(typeof renderHand === 'function') renderHand(); }, 50);
+  // Glitch fury: check para novo evento de glitch
+  if(typeof onDungeonStartGlitchCheck === 'function') onDungeonStartGlitchCheck();
 }
 
 function spawnDungeonInitial(){
