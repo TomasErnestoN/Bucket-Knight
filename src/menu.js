@@ -139,7 +139,10 @@ function goToMenu() {
   document.getElementById('main-menu').style.display = 'flex';
   updateMenuGold();
   gameStarted = false;
-  if(typeof Audio !== 'undefined' && Audio.playLobbyMusic) Audio.playLobbyMusic();
+  if(typeof Audio !== 'undefined') {
+    if(Audio.stopTrickyMusic) Audio.stopTrickyMusic();
+    if(Audio.playLobbyMusic) Audio.playLobbyMusic();
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -169,11 +172,18 @@ function openCardModal(id, context, slotIndex) {
   if(def.rarity === 'especial'){
     const maxLevel = 5;
     const stars = '★'.repeat(specialUpgradeLevel) + '☆'.repeat(maxLevel - specialUpgradeLevel);
-    const durationSec = (getSpecialDurationForLevel(specialUpgradeLevel)/1000).toFixed(2).replace(/\.?0+$/,'');
     upgradeBlock.style.display = 'block';
     document.getElementById('modal-stars').textContent = stars;
-    document.getElementById('modal-upgrade-info').textContent =
-      `Nível ${specialUpgradeLevel} / ${maxLevel}  ·  ⏱ ${durationSec}s`;
+    if(id === 'glitch_fury'){
+      const glitchChanceTable = [50, 60, 70, 80, 90];
+      const glitchChancePct = glitchChanceTable[Math.min(specialUpgradeLevel - 1, 4)];
+      document.getElementById('modal-upgrade-info').textContent =
+        `Nível ${specialUpgradeLevel} / ${maxLevel}  ·  👻 ${glitchChancePct}% chance de glitch`;
+    } else {
+      const durationSec = (getSpecialDurationForLevel(specialUpgradeLevel)/1000).toFixed(2).replace(/\.?0+$/,'');
+      document.getElementById('modal-upgrade-info').textContent =
+        `Nível ${specialUpgradeLevel} / ${maxLevel}  ·  ⏱ ${durationSec}s`;
+    }
   } else {
     upgradeBlock.style.display = 'none';
   }
@@ -260,10 +270,17 @@ function renderCardModalUpgrade() {
   // Atualiza estrelas e botão de upgrade sem fechar o modal
   const maxLevel  = 5;
   const stars     = '★'.repeat(specialUpgradeLevel) + '☆'.repeat(maxLevel - specialUpgradeLevel);
-  const durationSec = (getSpecialDurationForLevel(specialUpgradeLevel)/1000).toFixed(2).replace(/\.?0+$/,'');
   document.getElementById('modal-stars').textContent = stars;
-  document.getElementById('modal-upgrade-info').textContent =
-    `Nível ${specialUpgradeLevel} / ${maxLevel}  ·  ⏱ ${durationSec}s`;
+  if(_modalCardId === 'glitch_fury') {
+    const glitchChanceTable = [50, 60, 70, 80, 90];
+    const glitchChancePct = glitchChanceTable[Math.min(specialUpgradeLevel - 1, 4)];
+    document.getElementById('modal-upgrade-info').textContent =
+      `Nível ${specialUpgradeLevel} / ${maxLevel}  ·  👻 ${glitchChancePct}% chance de glitch`;
+  } else {
+    const durationSec = (getSpecialDurationForLevel(specialUpgradeLevel)/1000).toFixed(2).replace(/\.?0+$/,'');
+    document.getElementById('modal-upgrade-info').textContent =
+      `Nível ${specialUpgradeLevel} / ${maxLevel}  ·  ⏱ ${durationSec}s`;
+  }
 
   // Re-renderiza os botões
   const id = _modalCardId;

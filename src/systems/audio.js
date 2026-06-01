@@ -266,14 +266,13 @@ const Audio = (() => {
   function stopLobbyMusic() {
     _lobbyPlayPending = false;
     if (_lobbySource) {
-      const t = ctx.currentTime;
-      _lobbyGain.gain.cancelScheduledValues(t);
-      _lobbyGain.gain.setValueAtTime(_lobbyGain.gain.value, t);
-      _lobbyGain.gain.linearRampToValueAtTime(0, t + 0.8);
-      setTimeout(() => {
-        try { _lobbySource.stop(); } catch(e) {}
-        _lobbySource = null;
-      }, 850);
+      if (_lobbyGain) {
+        const t = ctx.currentTime;
+        _lobbyGain.gain.cancelScheduledValues(t);
+        _lobbyGain.gain.setValueAtTime(0, t);
+      }
+      try { _lobbySource.stop(); } catch(e) {}
+      _lobbySource = null;
     }
     _lobbyPlaying = false;
   }
@@ -303,7 +302,7 @@ const Audio = (() => {
   let _trickyMusicSource = null;
   let _trickyMusicGain = null;
 
-  fetch('./assets/audio/Tricky_madness_music.ogg')
+  fetch('./assets/audio/Madness.ogg')
     .then(r => r.arrayBuffer())
     .then(buf => { _trickyMusicRaw = buf; if(ctx) ctx.decodeAudioData(buf.slice(0), d => { _trickyMusicBuffer = d; }); })
     .catch(() => {});
