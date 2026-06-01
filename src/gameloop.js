@@ -3025,7 +3025,11 @@ function onDungeonStartGlitchCheck(){
   const thisDungeonNum = DUNGEON_DEFS[currentDungeon].num;
   const skipDungeon = glitchFuryUsedDungeon + 1;
   if(ownedCards.includes('glitch_fury') && thisDungeonNum !== skipDungeon){
-    if(Math.random() < 0.5){
+    // Chance aumenta com o nível do upgrade: L1=50%, L2=60%, L3=70%, L4=80%, L5=90%
+    const glitchChanceTable = [0.5, 0.6, 0.7, 0.8, 0.9];
+    const glitchLevel = (typeof specialUpgradeLevel !== 'undefined') ? specialUpgradeLevel : 1;
+    const glitchChance = glitchChanceTable[Math.min(glitchLevel - 1, 4)];
+    if(Math.random() < glitchChance){
       // Ativa o overlay de glitch após 1.5s (após o player entrar)
       setTimeout(() => {
         if(!gameOver && !transitioning){
