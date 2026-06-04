@@ -73,7 +73,7 @@ const Audio = (() => {
     _musicFilter.connect(masterGain);
   }
 
-  function playMusic(offset) {
+  function playMusic(offset, options) {
     if (!_musicBuffer) { _playPending = true; return; }
     if (!ctx || _musicPlaying) return;
     _ensureMusicNodes();
@@ -88,7 +88,7 @@ const Audio = (() => {
     const t = ctx.currentTime;
     _musicGain.gain.cancelScheduledValues(t);
     _musicGain.gain.setValueAtTime(0, t);
-    _musicGain.gain.linearRampToValueAtTime(muted ? 0 : 0.55, t + 1.5);
+    _musicGain.gain.linearRampToValueAtTime(muted ? 0 : 0.55, t + (options && options.fadeIn ? options.fadeIn : 1.5));
     _musicFilter.frequency.cancelScheduledValues(t);
     _musicFilter.frequency.setValueAtTime(20000, t);
   }
@@ -217,6 +217,7 @@ const Audio = (() => {
   let _lobbyLoaded = false;
   let _lobbyPlaying = false;
   let _lobbyPlayPending = false;
+  let _lobbyKilled = false;
 
   function _loadLobbyMusic() {
     if (_lobbyLoaded) return;
@@ -228,7 +229,8 @@ const Audio = (() => {
         if (ctx) {
           ctx.decodeAudioData(buf.slice(0), decoded => {
             _lobbyBuffer = decoded;
-            if (_lobbyPlayPending) { _lobbyPlayPending = false; playLobbyMusic(); }
+            if (_lobbyPlayPending && !_lobbyKilled) { _lobbyPlayPending = false; playLobbyMusic(); }
+            else { _lobbyPlayPending = false; }
           });
         }
       })
@@ -239,11 +241,13 @@ const Audio = (() => {
     if (!_lobbyRawBuffer || _lobbyBuffer) return;
     ctx.decodeAudioData(_lobbyRawBuffer.slice(0), decoded => {
       _lobbyBuffer = decoded;
-      if (_lobbyPlayPending) { _lobbyPlayPending = false; playLobbyMusic(); }
+      if (_lobbyPlayPending && !_lobbyKilled) { _lobbyPlayPending = false; playLobbyMusic(); }
+      else { _lobbyPlayPending = false; }
     });
   }
 
   function playLobbyMusic() {
+    _lobbyKilled = false;
     if (!_lobbyBuffer) { _lobbyPlayPending = true; return; }
     if (!ctx || _lobbyPlaying) return;
     if (!_lobbyGain) {
@@ -265,12 +269,14 @@ const Audio = (() => {
 
   function stopLobbyMusic() {
     _lobbyPlayPending = false;
+    _lobbyKilled = true;
+    if (_lobbyGain) {
+      const t = ctx ? ctx.currentTime : 0;
+      _lobbyGain.gain.cancelScheduledValues(t);
+      _lobbyGain.gain.setValueAtTime(0, t);
+    }
     if (_lobbySource) {
-      if (_lobbyGain) {
-        const t = ctx.currentTime;
-        _lobbyGain.gain.cancelScheduledValues(t);
-        _lobbyGain.gain.setValueAtTime(0, t);
-      }
+      try { _lobbySource.disconnect(); } catch(e) {}
       try { _lobbySource.stop(); } catch(e) {}
       _lobbySource = null;
     }
@@ -301,6 +307,9 @@ const Audio = (() => {
   let _trickyMusicRaw = null, _trickyMusicBuffer = null;
   let _trickyMusicSource = null;
   let _trickyMusicGain = null;
+  let _trickyMusicOffset = 0;     // posição em segundos onde pausou
+  let _trickyMusicStartedAt = 0;  // ctx.currentTime quando o source foi iniciado
+  let _trickyMusicPaused = false;
 
   fetch('./assets/audio/Madness.ogg')
     .then(r => r.arrayBuffer())
@@ -315,16 +324,60 @@ const Audio = (() => {
     if(!ctx || !_trickyMusicBuffer || muted) return;
     if(_trickyMusicSource) { try { _trickyMusicSource.stop(); } catch(e){} _trickyMusicSource = null; }
     if(!_trickyMusicGain) { _trickyMusicGain = ctx.createGain(); _trickyMusicGain.connect(masterGain); }
+    _trickyMusicGain.gain.cancelScheduledValues(ctx.currentTime);
     _trickyMusicGain.gain.setValueAtTime(muted ? 0 : 0.85, ctx.currentTime);
     _trickyMusicSource = ctx.createBufferSource();
     _trickyMusicSource.buffer = _trickyMusicBuffer;
     _trickyMusicSource.loop = true;
     _trickyMusicSource.connect(_trickyMusicGain);
-    _trickyMusicSource.start(0);
+    const startOffset = _trickyMusicOffset % _trickyMusicBuffer.duration;
+    _trickyMusicSource.start(0, startOffset);
+    _trickyMusicStartedAt = ctx.currentTime - startOffset;
+    _trickyMusicPaused = false;
+    _trickyMusicOffset = 0;
+  }
+
+  function pauseTrickyMusic() {
+    if(!_trickyMusicSource || _trickyMusicPaused) return;
+    _trickyMusicOffset = (ctx.currentTime - _trickyMusicStartedAt) % (_trickyMusicBuffer ? _trickyMusicBuffer.duration : 1);
+    try { _trickyMusicSource.stop(); } catch(e){}
+    _trickyMusicSource = null;
+    _trickyMusicPaused = true;
+  }
+
+  function resumeTrickyMusic() {
+    if(!_trickyMusicPaused || !_trickyMusicBuffer) return;
+    _trickyMusicPaused = false;
+    if(!_trickyMusicGain) { _trickyMusicGain = ctx.createGain(); _trickyMusicGain.connect(masterGain); }
+    _trickyMusicGain.gain.cancelScheduledValues(ctx.currentTime);
+    _trickyMusicGain.gain.setValueAtTime(muted ? 0 : 0.85, ctx.currentTime);
+    _trickyMusicSource = ctx.createBufferSource();
+    _trickyMusicSource.buffer = _trickyMusicBuffer;
+    _trickyMusicSource.loop = true;
+    _trickyMusicSource.connect(_trickyMusicGain);
+    const startOffset = _trickyMusicOffset % _trickyMusicBuffer.duration;
+    _trickyMusicSource.start(0, startOffset);
+    _trickyMusicStartedAt = ctx.currentTime - startOffset;
+    _trickyMusicOffset = 0;
   }
 
   function stopTrickyMusic() {
     if(_trickyMusicSource) { try { _trickyMusicSource.stop(); } catch(e){} _trickyMusicSource = null; }
+    _trickyMusicPaused = false;
+    _trickyMusicOffset = 0;
+  }
+
+  function fadeTrickyMusicOut(duration) {
+    if(!ctx || !_trickyMusicGain || !_trickyMusicSource) return;
+    const t = ctx.currentTime;
+    _trickyMusicGain.gain.cancelScheduledValues(t);
+    _trickyMusicGain.gain.setValueAtTime(_trickyMusicGain.gain.value, t);
+    _trickyMusicGain.gain.linearRampToValueAtTime(0, t + duration);
+    const src = _trickyMusicSource;
+    setTimeout(() => {
+      if(src) { try { src.stop(); } catch(e){} }
+      if(_trickyMusicSource === src) _trickyMusicSource = null;
+    }, duration * 1000 + 100);
   }
 
   // ── SNIPER SOUNDS ────────────────────────────────────────────
@@ -735,7 +788,8 @@ const Audio = (() => {
     playMusic, stopMusic, pauseMusic, resumeMusic,
     playJackpotMusic,
     playLobbyMusic, stopLobbyMusic,
-    playTrickyMusic, stopTrickyMusic,
+    playTrickyMusic, stopTrickyMusic, fadeTrickyMusicOut,
+    pauseTrickyMusic, resumeTrickyMusic,
   };
 })();
 

@@ -177,6 +177,13 @@ let glitchFuryAwaitClick = false;     // aguardando clique para começar
 let glitchFuryScreamTimer = -1;       // timer para grito (-1 = inativo)
 let glitchFuryAttackTimer = 0;        // cooldown entre ataques com a placa
 let glitchFurySwing = null;           // animação de ataque atual {x,y,t,maxT}
+let glitchFurySwingDir = 1;
+let cameraShake = 0;        // intensidade atual do shake (decai com o tempo)
+let cameraShakeX = 0, cameraShakeY = 0; // offset atual do frame           // +1 direita, -1 esquerda (alterna a cada ataque)
+let glitchFuryCombo = 0;              // contador de ataques consecutivos
+let glitchFuryShockwaves = [];        // ondas de choque {x,y,t,maxT,r}
+let glitchFurySlashes = [];           // rastros de slash {points,t,maxT,color}
+let glitchFuryFragments = [];         // fragmentos voando {x,y,vx,vy,t,maxT,color,size}
 let glitchFuryMessages = [];          // mensagens glitchando na tela
 let glitchFuryMsgTimer = 0;           // timer para próxima mensagem
 let glitchFuryMsgInterval = 5000;     // ms entre mensagens

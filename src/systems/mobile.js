@@ -549,12 +549,7 @@ function showShopCheatFeedback() {
 // INICIALIZAÇÃO
 // ═══════════════════════════════════════════════════════════════
 function initMobile() {
-  // Botão fullscreen aparece sempre (útil em desktop também, mas especialmente no mobile)
-  createFullscreenButton();
-
   if (!IS_MOBILE) {
-    // No desktop, ainda mostra o botão fullscreen mas não faz o resto
-    // Apenas registra o cheat da loja
     setupShopDiceCheat();
     return;
   }
