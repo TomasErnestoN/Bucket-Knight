@@ -75,7 +75,7 @@ function update(dt){
 
   // ── Camera shake: decai exponencialmente ──
   cameraShake = Math.max(0, cameraShake - dt * 0.010);
-  const shakeAmt = (cameraShake * cameraShake) * 0.07; // menos intenso
+  const shakeAmt = Math.min(Math.sqrt(cameraShake) * 1.8, 13); // curva suave, máx 13px
   cameraShakeX = shakeAmt > 0.2 ? (Math.random()-0.5) * shakeAmt : 0;
   cameraShakeY = shakeAmt > 0.2 ? (Math.random()-0.5) * shakeAmt : 0;
 
@@ -228,18 +228,6 @@ function update(dt){
       glitchFurySwing.t -= dt;
       if(glitchFurySwing.t <= 0) glitchFurySwing = null;
     }
-    // Update shockwaves
-    glitchFuryShockwaves = glitchFuryShockwaves.filter(sw => { sw.t -= dt; return sw.t > 0; });
-    // Update slash trails
-    glitchFurySlashes = glitchFurySlashes.filter(sl => { sl.t -= dt; return sl.t > 0; });
-    // Update fragments
-    glitchFuryFragments = glitchFuryFragments.filter(fr => {
-      fr.t -= dt;
-      fr.x += fr.vx * dt * 0.06;
-      fr.y += fr.vy * dt * 0.06;
-      fr.vy += 0.08 * dt * 0.06; // gravity
-      return fr.t > 0;
-    });
     glitchFuryMsgTimer -= dt;
     if(glitchFuryMsgTimer <= 0){
       const GMSG_LIST = [
@@ -257,6 +245,16 @@ function update(dt){
     }
     glitchFuryMessages = glitchFuryMessages.filter(m => { m.life -= dt; return m.life > 0; });
   }
+  // Efeitos visuais do glitch fury decaem independentemente de estar ativo ou não
+  glitchFuryShockwaves = glitchFuryShockwaves.filter(sw => { sw.t -= dt; return sw.t > 0; });
+  glitchFurySlashes    = glitchFurySlashes.filter(sl => { sl.t -= dt; return sl.t > 0; });
+  glitchFuryFragments  = glitchFuryFragments.filter(fr => {
+    fr.t -= dt;
+    fr.x += fr.vx * dt * 0.06;
+    fr.y += fr.vy * dt * 0.06;
+    fr.vy += 0.08 * dt * 0.06;
+    return fr.t > 0;
+  });
 
   // ── GLITCH EVENT: fade overlay ──
   if(glitchEventActive){
@@ -432,6 +430,10 @@ function update(dt){
     player.y+=my*player.speed*ghostMult*glitchSpeedMult*(dt/16);
     clampToDungeon(player);
   }
+  // Clamp forçado — sem a condição "inside" do clampToDungeon (evita sair pelo Glitch Fury speed)
+  const _pm = player.size;
+  player.x = Math.max(DX + _pm, Math.min(DX + DUNGEON_SIZE - _pm, player.x));
+  player.y = Math.max(DY + _pm, Math.min(DY + DUNGEON_SIZE - _pm, player.y));
 
   player.trail.forEach(t=>t.life-=dt/ROLL_DURATION);
   player.trail=player.trail.filter(t=>t.life>0);
@@ -1202,9 +1204,11 @@ function draw(dt){
   const def=DUNGEON_DEFS[currentDungeon];
   const nextDef=DUNGEON_DEFS[Math.min(currentDungeon+1,DUNGEON_DEFS.length-1)];
   ctx.clearRect(0,0,W,H);
+  ctx.setTransform(1,0,0,1,0,0); // garante transform limpo a cada frame
   ctx.fillStyle='#06060e';ctx.fillRect(0,0,W,H);
   // ── Camera shake translate ──
-  if(cameraShakeX !== 0 || cameraShakeY !== 0){
+  const _shakeApplied = (cameraShakeX !== 0 || cameraShakeY !== 0);
+  if(_shakeApplied){
     ctx.save();
     ctx.translate(cameraShakeX, cameraShakeY);
   }
@@ -1232,6 +1236,7 @@ function draw(dt){
       }
       ctx.textAlign='left';ctx.globalAlpha=1;
     }
+    if(_shakeApplied) ctx.restore();
     return;
   }
 
@@ -2504,25 +2509,8 @@ function draw(dt){
   });
 
 
-// ── GLITCH FURY: Overlay vermelho pulsante com vinheta ──
-  if(glitchFuryActive){
-    ctx.save();
-    // Overlay base pulsante
-    const glitchRed = 0.10 + Math.sin(Date.now()*0.003)*0.05;
-    // Flash extra no finisher (combo=0 significa que acabou de resetar)
-    const finisherFlash = (glitchFurySwing && glitchFurySwing.isFinisher)
-      ? Math.sin((1 - glitchFurySwing.t/glitchFurySwing.maxT) * Math.PI) * 0.18
-      : 0;
-    ctx.fillStyle = `rgba(200,0,0,${glitchRed + finisherFlash})`;
-    ctx.fillRect(0,0,W,H);
-    // Vinheta vermelha nas bordas
-    const vgrd = ctx.createRadialGradient(W/2,H/2,H*0.3,W/2,H/2,H*0.8);
-    vgrd.addColorStop(0, 'rgba(120,0,0,0)');
-    vgrd.addColorStop(1, `rgba(180,0,0,${0.22 + Math.sin(Date.now()*0.002)*0.06})`);
-    ctx.fillStyle = vgrd;
-    ctx.fillRect(0,0,W,H);
-    ctx.restore();
-  }
+// ── GLITCH FURY: Overlay vermelho — desenhado APÓS o shake para não vazar nas bordas ──
+// (movido para depois do ctx.restore() do shake — ver abaixo)
 
   // ── GLITCH FURY: Mensagens glitch flutuantes ──
   if(glitchFuryActive && glitchFuryMessages.length > 0){
@@ -2730,7 +2718,32 @@ function draw(dt){
   }
 
 // ── Fecha o camera shake translate ──
-  if(cameraShakeX !== 0 || cameraShakeY !== 0) ctx.restore();
+  if(_shakeApplied){
+    ctx.restore();
+    const pad = 20;
+    ctx.fillStyle = '#06060e';
+    ctx.fillRect(0, 0, W, pad);
+    ctx.fillRect(0, H - pad, W, pad);
+    ctx.fillRect(0, 0, pad, H);
+    ctx.fillRect(W - pad, 0, pad, H);
+  }
+
+  // ── GLITCH FURY: Overlay vermelho pulsante com vinheta (fora do shake) ──
+  if(glitchFuryActive){
+    ctx.save();
+    const glitchRed = 0.10 + Math.sin(Date.now()*0.003)*0.05;
+    const finisherFlash = (glitchFurySwing && glitchFurySwing.isFinisher)
+      ? Math.sin((1 - glitchFurySwing.t/glitchFurySwing.maxT) * Math.PI) * 0.18
+      : 0;
+    ctx.fillStyle = `rgba(200,0,0,${glitchRed + finisherFlash})`;
+    ctx.fillRect(0,0,W,H);
+    const vgrd = ctx.createRadialGradient(W/2,H/2,H*0.3,W/2,H/2,H*0.8);
+    vgrd.addColorStop(0, 'rgba(120,0,0,0)');
+    vgrd.addColorStop(1, `rgba(180,0,0,${0.22 + Math.sin(Date.now()*0.002)*0.06})`);
+    ctx.fillStyle = vgrd;
+    ctx.fillRect(0,0,W,H);
+    ctx.restore();
+  }
 
 // Pause overlay — gerenciado via DOM (ver #pause-screen no HTML)
   if(paused){
@@ -2742,11 +2755,13 @@ function showPauseScreen() {
   updatePauseSoundLabel();
   document.getElementById('pause-screen').style.display = 'flex';
   Audio.pauseMusic();
+  if(typeof Audio.pauseTrickyMusic === 'function') Audio.pauseTrickyMusic();
 }
 
 function hidePauseScreen() {
   document.getElementById('pause-screen').style.display = 'none';
   Audio.resumeMusic();
+  if(typeof Audio.resumeTrickyMusic === 'function') Audio.resumeTrickyMusic();
 }
 
 function updatePauseSoundLabel() {
@@ -3032,7 +3047,7 @@ function doGlitchFuryAttack(){
   glitchFurySwing = { t: SWING_DUR, maxT: SWING_DUR, dir, arcFrom, arcTo, isFinisher };
 
   // ── Camera shake: acumula a cada ataque ──
-  cameraShake = Math.min(cameraShake + (isFinisher ? 12 : 6), 55);
+  cameraShake = Math.min(cameraShake + (isFinisher ? 8 : 4), 30);
 
   // ── Onda de choque no player ──
   glitchFuryShockwaves.push({
@@ -3226,8 +3241,12 @@ function onDungeonStartGlitchCheck(){
     glitchFurySwing = null;
     glitchFurySwingDir = 1; glitchFuryCombo = 0;
     glitchFuryShockwaves = []; glitchFurySlashes = []; glitchFuryFragments = [];
-    if(typeof Audio !== 'undefined' && Audio.stopTrickyMusic) Audio.stopTrickyMusic();
-    if(typeof Audio !== 'undefined' && Audio.playMusic) Audio.playMusic();
+    const TRICKY_FADE = 2.5; // segundos de fade out da Madness
+    const MUSIC_FADE  = 3.0; // segundos de fade in da música normal
+    if(typeof Audio !== 'undefined' && Audio.fadeTrickyMusicOut) Audio.fadeTrickyMusicOut(TRICKY_FADE);
+    setTimeout(() => {
+      if(typeof Audio !== 'undefined' && Audio.playMusic) Audio.playMusic(0, { fadeIn: MUSIC_FADE });
+    }, TRICKY_FADE * 1000);
   }
   // Sorteia se um glitch vai aparecer nesta dungeon
   // Bloqueado se foi a dungeon imediatamente após o uso

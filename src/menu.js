@@ -120,6 +120,9 @@ function startGame() {
     }
     return;
   }
+  // Garante que o AudioContext existe antes de qualquer operação de áudio
+  if(typeof Audio !== 'undefined' && Audio.init) Audio.init();
+  if(typeof Audio !== 'undefined' && Audio.stopLobbyMusic) Audio.stopLobbyMusic();
   _menuClick();
   document.getElementById('main-menu').style.display = 'none';
   document.getElementById('ui').style.display = 'block';
@@ -129,7 +132,6 @@ function startGame() {
   gameStarted = true;
   currentEquippedDeck = equippedDeck.filter(Boolean);
   init();
-  if(typeof Audio !== 'undefined' && Audio.stopLobbyMusic) Audio.stopLobbyMusic();
   Audio.playMusic();
   if(!gameLoopStarted){ gameLoopStarted=true; requestAnimationFrame(gameLoop); }
 }
@@ -310,11 +312,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Toca a música do lobby no primeiro clique do usuário (necessário por política de autoplay)
   function startLobbyOnFirstClick() {
+    document.removeEventListener('click', startLobbyOnFirstClick);
     if(typeof Audio !== 'undefined') {
       Audio.init();
-      Audio.playLobbyMusic();
+      // Só toca a música do lobby se o jogo ainda não começou
+      if(!gameStarted) Audio.playLobbyMusic();
     }
-    document.removeEventListener('click', startLobbyOnFirstClick);
   }
   document.addEventListener('click', startLobbyOnFirstClick);
 
@@ -900,6 +903,7 @@ function openOptionsScreen() {
   _menuClick();
   document.getElementById('main-menu').style.display = 'none';
   updateOptionsSoundLabel();
+  updateOptionsFullscreenLabel();
   document.getElementById('options-screen').style.display = 'flex';
 }
 
@@ -959,6 +963,17 @@ function toggleOptionsSound() {
   // Sincroniza com tela de pause se estiver aberta
   if(typeof updatePauseSoundLabel === 'function') updatePauseSoundLabel();
 }
+
+function updateOptionsFullscreenLabel() {
+  const btn = document.getElementById('options-fullscreen-btn');
+  if(!btn) return;
+  const isFS = !!(document.fullscreenElement || document.webkitFullscreenElement);
+  btn.textContent = isFS ? '✕ Sair da Tela Cheia' : '⛶ Tela Cheia';
+}
+
+// Atualiza o label ao mudar fullscreen por qualquer meio (ex: tecla Esc)
+document.addEventListener('fullscreenchange', updateOptionsFullscreenLabel);
+document.addEventListener('webkitfullscreenchange', updateOptionsFullscreenLabel);
 
 // ═══════════════════════════════════════════════════════════════
 // CHEATS
@@ -1063,28 +1078,48 @@ const ARTIFACT_DEFS = {
 // ═══════════════════════════════════════════════════════════════
 // SISTEMA DE NÍVEIS DE ARTEFATOS
 // ═══════════════════════════════════════════════════════════════
-// Quantas duplicatas por nível (acumulado): nv1=0, nv2=5, nv3=15, nv4=35, nv5=65
-const ARTIFACT_LEVEL_THRESHOLDS = [0, 5, 15, 35, 65]; // duplicatas necessárias para atingir nível 2,3,4,5
+// Duplicatas necessárias POR NÍVEL (incremental, não acumulado):
+// nv1→2: 5 dupes | nv2→3: 10 dupes | nv3→4: 20 dupes | nv4→5: 30 dupes
+const ARTIFACT_LEVEL_THRESHOLDS = [5, 10, 20, 30]; // custo incremental de cada upgrade
 
-// Retorna o nível (1-5) com base nas duplicatas possuídas
+// Retorna o nível (1-5) com base nas duplicatas consumidas (salvas separado)
 function getArtifactLevel(id) {
   const total = ownedArtifacts.filter(x => x === id).length;
-  // 1 cópia = nível 1 (tem o artefato); extras são duplicatas
+  // 1 cópia = nível 1; extras são duplicatas disponíveis
   const dupes = Math.max(0, total - 1);
+  // Calcula nível consumindo duplicatas incrementalmente
   let level = 1;
-  for(let i = ARTIFACT_LEVEL_THRESHOLDS.length - 1; i >= 0; i--) {
-    if(dupes >= ARTIFACT_LEVEL_THRESHOLDS[i]) { level = i + 1; break; }
+  let remaining = dupes;
+  for(let i = 0; i < ARTIFACT_LEVEL_THRESHOLDS.length; i++) {
+    if(remaining >= ARTIFACT_LEVEL_THRESHOLDS[i]) {
+      remaining -= ARTIFACT_LEVEL_THRESHOLDS[i];
+      level++;
+    } else {
+      break;
+    }
   }
   return Math.min(5, level);
 }
 
-// Duplicatas necessárias para próximo nível (a partir de 1 cópia base)
+// Duplicatas gastas até o nível atual (para calcular as disponíveis restantes)
+function getDupesSpentForLevel(level) {
+  let spent = 0;
+  for(let i = 0; i < Math.min(level - 1, ARTIFACT_LEVEL_THRESHOLDS.length); i++) {
+    spent += ARTIFACT_LEVEL_THRESHOLDS[i];
+  }
+  return spent;
+}
+
+// Duplicatas necessárias para próximo nível
 function getDupesForNextLevel(id) {
   const total = ownedArtifacts.filter(x => x === id).length;
   const dupes = Math.max(0, total - 1);
   const level = getArtifactLevel(id);
   if(level >= 5) return null;
-  return ARTIFACT_LEVEL_THRESHOLDS[level] - dupes; // THRESHOLDS[level] = limiar do próximo nível
+  // Quanto já foi consumido até o nível atual
+  const spent = getDupesSpentForLevel(level);
+  const remaining = dupes - spent;
+  return ARTIFACT_LEVEL_THRESHOLDS[level - 1] - remaining;
 }
 
 // Tabelas de upgrades por artefato por nível (índice 0 = nível 1)
@@ -1174,12 +1209,24 @@ function rollArtifactRarity() {
 }
 
 // Retorna um artifact id aleatório com base na raridade dada
-// (Filtra apenas artefatos que existem com essa raridade)
+// (Filtra artefatos da raridade pedida e exclui os que já estão no nível máximo)
 function rollArtifactOfRarity(rarity) {
-  const candidates = Object.values(ARTIFACT_DEFS).filter(a => a.rarity === rarity);
+  const isMaxLevel = id => {
+    const hasUpgrades = ARTIFACT_UPGRADE_TABLES[id] !== undefined;
+    return hasUpgrades && getArtifactLevel(id) >= 5;
+  };
+
+  const candidates = Object.values(ARTIFACT_DEFS).filter(a =>
+    a.rarity === rarity && !isMaxLevel(a.id)
+  );
+
   if(candidates.length === 0) {
-    // Fallback: qualquer artefato
-    const all = Object.values(ARTIFACT_DEFS);
+    // Fallback: qualquer artefato que não seja nível máximo
+    const all = Object.values(ARTIFACT_DEFS).filter(a => !isMaxLevel(a.id));
+    if(all.length === 0) {
+      // Todos os artefatos no máximo — retorna o primeiro (não vai adicionar dupes)
+      return Object.values(ARTIFACT_DEFS)[0].id;
+    }
     return all[Math.floor(Math.random() * all.length)].id;
   }
   return candidates[Math.floor(Math.random() * candidates.length)].id;
@@ -1202,11 +1249,13 @@ function buyChest() {
   const artifactId = rollArtifactOfRarity(rarity);
 
   const isDuplicate = ownedArtifacts.includes(artifactId);
+  const hasUpgrades = ARTIFACT_UPGRADE_TABLES[artifactId] !== undefined;
+  const alreadyMaxLevel = hasUpgrades && getArtifactLevel(artifactId) >= 5;
   let dupeCount = 0;
-  if(isDuplicate) {
+  if(isDuplicate && !alreadyMaxLevel) {
     dupeCount = Math.floor(Math.random() * 16) + 5;
     for(let i = 0; i < dupeCount; i++) ownedArtifacts.push(artifactId);
-  } else {
+  } else if(!isDuplicate) {
     ownedArtifacts.push(artifactId);
   }
 
@@ -1239,7 +1288,16 @@ function openChestOverlay() {
   // Fade in
   overlay.style.opacity = '0';
   overlay.style.transition = 'opacity 0.25s';
+  overlay.style.cursor = 'pointer';
   requestAnimationFrame(() => { overlay.style.opacity = '1'; });
+
+  // Clique em qualquer lugar do overlay conta como click no bau
+  overlay._chestHandler = function(e) {
+    // Nao contar cliques no botao de fechar apos a revelacao
+    if(e.target.closest && e.target.closest('button')) return;
+    chestClick();
+  };
+  overlay.addEventListener('click', overlay._chestHandler);
 }
 
 function chestClick() {
@@ -1290,6 +1348,7 @@ function doOpenChestReveal() {
     reveal.style.opacity = '0';
     reveal.style.transition = 'opacity 0.3s';
     requestAnimationFrame(() => { reveal.style.opacity = '1'; });
+    document.getElementById('chest-open-overlay').style.cursor = 'default';
 
     const { artifactId, rarity, isDuplicate, dupeCount } = _chestPendingResult;
     const def = ARTIFACT_DEFS[artifactId];
@@ -1332,40 +1391,162 @@ function doOpenChestReveal() {
       const total = ownedArtifacts.filter(x => x === artifactId).length;
       const dupes = Math.max(0, total - 1);
       const level = getArtifactLevel(artifactId);
-      const prevThresh = level >= 2 ? ARTIFACT_LEVEL_THRESHOLDS[level-1] : 0;
-      const nextThresh = level < 5 ? ARTIFACT_LEVEL_THRESHOLDS[level] : ARTIFACT_LEVEL_THRESHOLDS[4];
-      const progressNow = Math.max(0, dupes - prevThresh);
-      const needed = nextThresh - prevThresh;
-      const pct = level >= 5 ? 100 : Math.min(100, Math.round(progressNow / needed * 100));
+      // Duplicatas já gastas até o nível atual
+      const spent = getDupesSpentForLevel(level);
+      // Duplicatas restantes dentro do nível atual (progresso para o próximo)
+      const dupesInLevel = dupes - spent;
+      const nextThresh = level < 5 ? ARTIFACT_LEVEL_THRESHOLDS[level - 1] : null;
+      const pct = level >= 5 ? 100 : Math.min(100, Math.round(dupesInLevel / nextThresh * 100));
 
       // pct antes de ganhar os dupes (para animar a diferença)
       const dupesBeforeGain = Math.max(0, dupes - dupeCount);
-      const progBefore = Math.max(0, dupesBeforeGain - prevThresh);
-      const pctBefore = level >= 5 ? 100 : Math.min(100, Math.round(progBefore / needed * 100));
+      const levelBefore = (() => {
+        let lv = 1, rem = Math.max(0, dupesBeforeGain);
+        for(let i = 0; i < ARTIFACT_LEVEL_THRESHOLDS.length; i++) {
+          if(rem >= ARTIFACT_LEVEL_THRESHOLDS[i]) { rem -= ARTIFACT_LEVEL_THRESHOLDS[i]; lv++; } else break;
+        }
+        return Math.min(5, lv);
+      })();
+      const spentBefore = getDupesSpentForLevel(levelBefore);
+      const dupesInLevelBefore = Math.max(0, dupesBeforeGain - spentBefore);
+      const threshBefore = levelBefore < 5 ? ARTIFACT_LEVEL_THRESHOLDS[levelBefore - 1] : null;
+      const pctBefore = levelBefore >= 5 ? 100 : Math.min(100, Math.round(dupesInLevelBefore / threshBefore * 100));
 
       const dupeLabel = document.getElementById('chest-reveal-dupe-label');
       const barFill = document.getElementById('chest-reveal-bar-fill');
       const barLabel = document.getElementById('chest-reveal-bar-label');
 
+      const didLevelUp = level > levelBefore;
+
       dupeLabel.textContent = `DUPLICATA ×${dupeCount} — NÍVEL ${level}${level>=5?' (MÁX)':''}`;
       barFill.style.background = level >= 5 ? '#ffcc44' : color;
       barFill.style.boxShadow = `0 0 8px ${color}`;
-      barLabel.textContent = level < 5 ? `${progressNow} / ${needed} para nível ${level+1}` : '✦ NÍVEL MÁXIMO ✦';
+      barLabel.textContent = level < 5 ? `${dupesInLevel} / ${nextThresh} para nível ${level+1}` : '✦ NÍVEL MÁXIMO ✦';
 
-      // Animar barra: começa no pct antigo, vai até o novo
-      barFill.style.transition = 'none';
-      barFill.style.width = pctBefore + '%';
-      setTimeout(() => {
-        barFill.style.transition = 'width 1.1s cubic-bezier(0.25,0.46,0.45,0.94)';
-        barFill.style.width = pct + '%';
-      }, 350);
+      if(didLevelUp) {
+        // 1) Mostra barra no estado ANTES do level up
+        barFill.style.transition = 'none';
+        barFill.style.width = pctBefore + '%';
+        barFill.style.background = color;
+        // Label do nivel anterior
+        dupeLabel.textContent = `DUPLICATA ×${dupeCount} — NÍVEL ${levelBefore}`;
+        const threshBeforeNext = ARTIFACT_LEVEL_THRESHOLDS[levelBefore - 1];
+        barLabel.textContent = `${dupesInLevelBefore} / ${threshBeforeNext} para nível ${levelBefore+1}`;
+
+        // 2) Barra enche até 100% rapidamente
+        setTimeout(() => {
+          barFill.style.transition = 'width 0.7s cubic-bezier(0.25,0.46,0.45,0.94)';
+          barFill.style.width = '100%';
+        }, 350);
+
+        // 3) Barra pisca + dispara animacao de level up
+        setTimeout(() => {
+          barFill.style.animation = 'levelUpBarFlash 0.25s ease-in-out 3';
+          playLevelUpAnimation(level, color);
+        }, 1150);
+
+        // 4) Após animação, atualiza barra para o novo nivel
+        setTimeout(() => {
+          barFill.style.animation = '';
+          barFill.style.transition = 'none';
+          barFill.style.width = pct + '%';
+          barFill.style.background = level >= 5 ? '#ffcc44' : color;
+          dupeLabel.textContent = `DUPLICATA ×${dupeCount} — NÍVEL ${level}${level>=5?' (MÁX)':''}`;
+          barLabel.textContent = level < 5 ? `${dupesInLevel} / ${nextThresh} para nível ${level+1}` : '✦ NÍVEL MÁXIMO ✦';
+        }, 2800);
+
+      } else {
+        // Sem level up: animacao normal da barra
+        barFill.style.transition = 'none';
+        barFill.style.width = pctBefore + '%';
+        setTimeout(() => {
+          barFill.style.transition = 'width 1.1s cubic-bezier(0.25,0.46,0.45,0.94)';
+          barFill.style.width = pct + '%';
+        }, 350);
+      }
     }
   }, 350);
+}
+
+function playLevelUpAnimation(newLevel, color) {
+  const overlay = document.getElementById('levelup-overlay');
+  const banner = document.getElementById('levelup-banner');
+  const starsEl = document.getElementById('levelup-stars-text');
+  const subEl = document.getElementById('levelup-sub');
+
+  const stars = '★'.repeat(newLevel) + '☆'.repeat(5 - newLevel);
+  const isMax = newLevel >= 5;
+
+  banner.textContent = isMax ? '✦ NÍVEL MÁXIMO! ✦' : `✦ NÍVEL ${newLevel}! ✦`;
+  banner.style.color = isMax ? '#ffcc44' : (color || '#ffcc44');
+  banner.style.textShadow = `0 0 20px ${isMax ? '#ffcc44' : color}, 0 0 40px ${isMax ? '#ff8800' : color}`;
+  starsEl.textContent = stars;
+  starsEl.style.color = isMax ? '#ffcc44' : (color || '#ffcc44');
+  subEl.textContent = isMax ? 'ARTEFATO NO PODER MÁXIMO!' : `Bonús de nível ${newLevel} desbloqueado!`;
+
+  // Reset animations
+  banner.style.animation = 'none';
+  starsEl.style.animation = 'none';
+  subEl.style.animation = 'none';
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      banner.style.animation = 'levelUpBanner 0.6s cubic-bezier(0.34,1.56,0.64,1) both, levelUpGlow 1s 0.6s ease-in-out infinite alternate';
+      starsEl.style.animation = 'levelUpBanner 0.6s 0.12s cubic-bezier(0.34,1.56,0.64,1) both';
+      subEl.style.animation = 'levelUpBanner 0.5s 0.28s ease both';
+    });
+  });
+
+  // Spawna particulas em volta
+  overlay.querySelectorAll('.levelup-particle').forEach(p => p.remove());
+  const emojis = ['✨', '💫', '⭐', '🔥', '💥', '🌟'];
+  for(let i = 0; i < 14; i++) {
+    const p = document.createElement('div');
+    p.className = 'levelup-particle';
+    p.textContent = emojis[Math.floor(Math.random() * emojis.length)];
+    const angle = (i / 14) * Math.PI * 2 + (Math.random() - 0.5) * 0.5;
+    const dist = 90 + Math.random() * 80;
+    const tx = Math.cos(angle) * dist;
+    const ty = Math.sin(angle) * dist;
+    p.style.setProperty('--tx', tx + 'px');
+    p.style.setProperty('--ty', ty + 'px');
+    p.style.animationDelay = (Math.random() * 0.2) + 's';
+    p.style.animationDuration = (0.8 + Math.random() * 0.5) + 's';
+    p.style.left = '50%';
+    p.style.top = '50%';
+    p.style.marginLeft = '-11px';
+    p.style.marginTop = '-11px';
+    overlay.appendChild(p);
+  }
+
+  // Shake no chest-reveal
+  const reveal = document.getElementById('chest-reveal');
+  if(reveal) {
+    reveal.style.animation = 'levelUpShake 0.5s ease';
+    setTimeout(() => { reveal.style.animation = ''; }, 500);
+  }
+
+  overlay.style.display = 'flex';
+
+  // Esconde apos 1.6s
+  setTimeout(() => {
+    overlay.style.transition = 'opacity 0.4s';
+    overlay.style.opacity = '0';
+    setTimeout(() => {
+      overlay.style.display = 'none';
+      overlay.style.opacity = '1';
+      overlay.style.transition = '';
+      overlay.querySelectorAll('.levelup-particle').forEach(p => p.remove());
+    }, 400);
+  }, 1600);
 }
 
 function closeChestOverlay() {
   _menuClick();
   const overlay = document.getElementById('chest-open-overlay');
+  if(overlay._chestHandler) {
+    overlay.removeEventListener('click', overlay._chestHandler);
+    overlay._chestHandler = null;
+  }
   overlay.style.transition = 'opacity 0.2s';
   overlay.style.opacity = '0';
   setTimeout(() => { overlay.style.display = 'none'; }, 220);
@@ -1435,13 +1616,12 @@ function openArtifactModal(id, context) {
     // Barra de progresso para próximo nível
     const progressEl = document.getElementById('art-modal-progress');
     if(level < 5) {
-      const prevThresh = level >= 2 ? ARTIFACT_LEVEL_THRESHOLDS[level-1] : 0;
-      const nextThresh = ARTIFACT_LEVEL_THRESHOLDS[level];
-      const progress = Math.max(0, dupes - prevThresh);
-      const needed = nextThresh - prevThresh;
-      const pct = Math.min(100, Math.round(progress / needed * 100));
+      const spent = getDupesSpentForLevel(level);
+      const dupesInLevel = dupes - spent;
+      const nextThresh = ARTIFACT_LEVEL_THRESHOLDS[level - 1];
+      const pct = Math.min(100, Math.round(dupesInLevel / nextThresh * 100));
       progressEl.innerHTML = `
-        <div style="font-size:8px;color:#667;margin-bottom:3px">Nível ${level+1}: ${progress}/${needed} duplicatas (${pct}%)</div>
+        <div style="font-size:8px;color:#667;margin-bottom:3px">Próximo nível: ${dupesInLevel}/${nextThresh} duplicatas (${pct}%)</div>
         <div class="art-progress-bar"><div class="art-progress-fill" style="width:${pct}%"></div></div>`;
     } else {
       progressEl.innerHTML = `<div style="font-size:9px;color:#ffcc44;margin:4px 0">✦ NÍVEL MÁXIMO ✦</div>`;
@@ -1451,12 +1631,12 @@ function openArtifactModal(id, context) {
     const table = ARTIFACT_UPGRADE_TABLES[id];
     const labelFn = ARTIFACT_UPGRADE_LABELS[id];
     let tableHtml = '<table class="art-level-table">';
-    tableHtml += `<tr><td style="color:#445566;font-size:8px">NÍV</td><td style="color:#445566;font-size:8px">EFEITO</td><td style="color:#445566;font-size:8px">DUPL.</td></tr>`;
+    tableHtml += `<tr><td style="color:#445566;font-size:8px">NÍV</td><td style="color:#445566;font-size:8px">EFEITO</td><td style="color:#445566;font-size:8px">TOTAL</td></tr>`;
     for(let lv = 1; lv <= 5; lv++) {
       const isCur = lv === level;
       const isLocked = lv > level;
       const cls = isCur ? 'lv-cur' : (isLocked ? 'lv-locked' : '');
-      const dupNeeded = lv >= 2 ? ARTIFACT_LEVEL_THRESHOLDS[lv-1] : 0;
+      const dupNeeded = lv >= 2 ? ARTIFACT_LEVEL_THRESHOLDS[lv-2] : 0;
       const effectStr = labelFn ? labelFn(lv) : String(table[lv-1]);
       tableHtml += `<tr class="${cls}">
         <td>${isCur ? '▶' : ''} Nv${lv}</td>
@@ -1476,9 +1656,9 @@ function openArtifactModal(id, context) {
     const table = ARTIFACT_UPGRADE_TABLES[id];
     const labelFn = ARTIFACT_UPGRADE_LABELS[id];
     let tableHtml = '<table class="art-level-table">';
-    tableHtml += `<tr><td style="color:#445566;font-size:8px">NÍV</td><td style="color:#445566;font-size:8px">EFEITO</td><td style="color:#445566;font-size:8px">DUPL.</td></tr>`;
+    tableHtml += `<tr><td style="color:#445566;font-size:8px">NÍV</td><td style="color:#445566;font-size:8px">EFEITO</td><td style="color:#445566;font-size:8px">TOTAL</td></tr>`;
     for(let lv = 1; lv <= 5; lv++) {
-      const dupNeeded = lv >= 2 ? ARTIFACT_LEVEL_THRESHOLDS[lv-1] : 0;
+      const dupNeeded = lv >= 2 ? ARTIFACT_LEVEL_THRESHOLDS[lv-2] : 0;
       const effectStr = labelFn ? labelFn(lv) : String(table[lv-1]);
       tableHtml += `<tr class="lv-locked"><td>Nv${lv}</td><td>${effectStr}</td><td>${dupNeeded === 0 ? '—' : dupNeeded + ' dupl.'}</td></tr>`;
     }
@@ -1491,6 +1671,61 @@ function openArtifactModal(id, context) {
   // Botões de ação
   const actions = document.getElementById('art-modal-actions');
   actions.innerHTML = '';
+
+  // Botão equipar (se veio da coleção e ainda tem slot livre e não está equipado)
+  if((context === 'collection' || context === 'album') && isOwned) {
+    const alreadyEquipped = equippedArtifacts.includes(id);
+    if(alreadyEquipped) {
+      // Mostrar que está equipado, com opção de desequipar
+      const slotIdx = equippedArtifacts.indexOf(id);
+      const btn = document.createElement('button');
+      btn.className = 'modal-btn btn-unequip';
+      btn.textContent = '✕ DESEQUIPAR';
+      btn.onclick = () => { _deckUnequipArtifact(slotIdx); closeArtifactModal(); };
+      actions.appendChild(btn);
+    } else {
+      const freeSlot = equippedArtifacts.indexOf(null);
+      const btn = document.createElement('button');
+      btn.className = 'modal-btn btn-equip';
+      if(freeSlot !== -1) {
+        btn.textContent = '+ EQUIPAR';
+        btn.onclick = () => {
+          _menuClick();
+          equippedArtifacts[freeSlot] = id;
+          writeSave(); _renderDeckArtifactSlots(); _renderDeckArtifactCollection();
+          closeArtifactModal();
+        };
+      } else {
+        btn.textContent = '+ EQUIPAR';
+        btn.title = 'Escolha um slot para substituir';
+        // Abre um submenu inline para escolher qual slot substituir
+        btn.onclick = () => {
+          actions.innerHTML = '<div style="font-size:10px;color:#aaa;margin-bottom:6px;letter-spacing:1px">SUBSTITUIR SLOT:</div>';
+          equippedArtifacts.forEach((slotId, i) => {
+            const slotDef = slotId ? ARTIFACT_DEFS[slotId] : null;
+            const slotBtn = document.createElement('button');
+            slotBtn.className = 'modal-btn btn-unequip';
+            slotBtn.style.fontSize = '10px';
+            slotBtn.style.padding = '5px 10px';
+            slotBtn.textContent = slotDef ? `${slotDef.icon} ${slotDef.name}` : `Slot ${i+1} (vazio)`;
+            slotBtn.onclick = () => {
+              _menuClick();
+              equippedArtifacts[i] = id;
+              writeSave(); _renderDeckArtifactSlots(); _renderDeckArtifactCollection();
+              closeArtifactModal();
+            };
+            actions.appendChild(slotBtn);
+          });
+          const cancelBtn = document.createElement('button');
+          cancelBtn.className = 'modal-btn btn-close';
+          cancelBtn.textContent = '← CANCELAR';
+          cancelBtn.onclick = closeArtifactModal;
+          actions.appendChild(cancelBtn);
+        };
+      }
+      actions.appendChild(btn);
+    }
+  }
 
   // Botão desequipar (se estiver equipado e chamado de um slot)
   if(context === 'slot') {
@@ -1541,12 +1776,11 @@ function renderArtifactCollectionGrid() {
       levelHtml = `<div style="font-size:9px;color:#ffcc44;letter-spacing:1px;margin:2px 0">${stars}</div>`;
       levelHtml += `<div style="font-size:8px;color:#aaddff;margin-bottom:2px">${upgradeLabel}</div>`;
       if(level < 5) {
-        const prevThresh = level >= 2 ? ARTIFACT_LEVEL_THRESHOLDS[level-1] : 0;
-        const nextThresh = ARTIFACT_LEVEL_THRESHOLDS[level];
-        const progress = Math.max(0, dupes - prevThresh);
-        const needed = nextThresh - prevThresh;
-        const pct = Math.min(100, Math.round(progress / needed * 100));
-        levelHtml += `<div style="font-size:7px;color:#778;margin-bottom:2px">Nv${level+1}: ${dupes - prevThresh}/${needed} dupl.</div>`;
+        const spent = getDupesSpentForLevel(level);
+        const dupesInLevel = Math.max(0, dupes - spent);
+        const needed = ARTIFACT_LEVEL_THRESHOLDS[level - 1];
+        const pct = Math.min(100, Math.round(dupesInLevel / needed * 100));
+        levelHtml += `<div style="font-size:7px;color:#778;margin-bottom:2px">Nv${level+1}: ${dupesInLevel}/${needed} dupl.</div>`;
         levelHtml += `<div style="background:#223;border-radius:3px;height:4px;width:100%;overflow:hidden"><div style="background:#44aaff;height:100%;width:${pct}%"></div></div>`;
       } else {
         levelHtml += `<div style="font-size:7px;color:#ffcc44">✦ MÁXIMO ✦</div>`;
