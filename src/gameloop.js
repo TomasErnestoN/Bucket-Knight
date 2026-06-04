@@ -73,6 +73,12 @@ function update(dt){
   manaTimer+=dt;
   if(manaTimer>=manaChargeRate){manaTimer=0;if(mana<maxMana){mana++;Audio.manaPip();updateManaDisplay();}}
 
+  // ── Camera shake: decai exponencialmente ──
+  cameraShake = Math.max(0, cameraShake - dt * 0.010);
+  const shakeAmt = (cameraShake * cameraShake) * 0.07; // menos intenso
+  cameraShakeX = shakeAmt > 0.2 ? (Math.random()-0.5) * shakeAmt : 0;
+  cameraShakeY = shakeAmt > 0.2 ? (Math.random()-0.5) * shakeAmt : 0;
+
   if(rollCooldown){
     rollTimer+=dt;
     const effectiveCooldown = ROLL_COOLDOWN_OVERRIDE !== null ? ROLL_COOLDOWN_OVERRIDE : ROLL_COOLDOWN;
@@ -222,6 +228,18 @@ function update(dt){
       glitchFurySwing.t -= dt;
       if(glitchFurySwing.t <= 0) glitchFurySwing = null;
     }
+    // Update shockwaves
+    glitchFuryShockwaves = glitchFuryShockwaves.filter(sw => { sw.t -= dt; return sw.t > 0; });
+    // Update slash trails
+    glitchFurySlashes = glitchFurySlashes.filter(sl => { sl.t -= dt; return sl.t > 0; });
+    // Update fragments
+    glitchFuryFragments = glitchFuryFragments.filter(fr => {
+      fr.t -= dt;
+      fr.x += fr.vx * dt * 0.06;
+      fr.y += fr.vy * dt * 0.06;
+      fr.vy += 0.08 * dt * 0.06; // gravity
+      return fr.t > 0;
+    });
     glitchFuryMsgTimer -= dt;
     if(glitchFuryMsgTimer <= 0){
       const GMSG_LIST = [
@@ -1185,6 +1203,11 @@ function draw(dt){
   const nextDef=DUNGEON_DEFS[Math.min(currentDungeon+1,DUNGEON_DEFS.length-1)];
   ctx.clearRect(0,0,W,H);
   ctx.fillStyle='#06060e';ctx.fillRect(0,0,W,H);
+  // ── Camera shake translate ──
+  if(cameraShakeX !== 0 || cameraShakeY !== 0){
+    ctx.save();
+    ctx.translate(cameraShakeX, cameraShakeY);
+  }
 
   if(transitioning){
     drawTransition(def,nextDef);
@@ -2074,38 +2097,71 @@ function draw(dt){
   ctx.fillStyle=flash?'#ffffff':(glitchFuryActive?'#22cc66':'#8888aa');ctx.fillRect(-player.size/2+2,-player.size/2-4,player.size-4,8);
   ctx.fillStyle='#222244';ctx.fillRect(-player.size/2+3,-player.size/2-2,player.size-6,3);
   if(!activeEffect && !glitchFuryActive){ctx.fillStyle='#4444aa';ctx.fillRect(-player.size/2-6,-4,5,10);}
-  // Placa como arma (glitch fury ativo) — saindo do corpo como espada do Zelda
+  // Placa como arma (glitch fury ativo) — versão épica com direção alternada
   if(glitchFuryActive){
     const swingProg = glitchFurySwing ? (1 - glitchFurySwing.t/glitchFurySwing.maxT) : 0;
-    // Arco exagerado: vai de -1.1 rad até +1.1 rad passando pelo centro
-    const swingArc = glitchFurySwing ? (Math.sin(swingProg * Math.PI) * 1.1) : 0;
+    const swingDir  = glitchFurySwing ? glitchFurySwing.dir : 1;
+    const arcFrom   = glitchFurySwing ? glitchFurySwing.arcFrom : 0;
+    const arcTo     = glitchFurySwing ? glitchFurySwing.arcTo   : 0;
+    const isFinisher= glitchFurySwing ? glitchFurySwing.isFinisher : false;
+    // Ease-in-out suave: progress segue uma curva cubic
+    const ease = swingProg < 0.5 ? 4*swingProg*swingProg*swingProg : 1-Math.pow(-2*swingProg+2,3)/2;
+    const swingArc = glitchFurySwing ? (arcFrom + (arcTo - arcFrom) * ease) : 0;
 
-    // ── Arco vermelho de swing (desenhado ANTES da placa, em world space) ──
+    // ── Slash em arco da placa (espaço rotacionado do player) ──
     if(glitchFurySwing){
-      const arcProg = Math.sin(swingProg * Math.PI); // 0→1→0
+      const arcProg = Math.sin(swingProg * Math.PI); // 0→1→0 bell curve
+      const R = player.size * 5.5; // raio do arco
+      // Ângulo varrido até agora (do início até swingArc)
+      const a0 = Math.min(arcFrom, swingArc);
+      const a1 = Math.max(arcFrom, swingArc);
+      const swingColor  = isFinisher ? '#ff0055' : '#ff2200';
+      const swingColor2 = isFinisher ? '#ff6600' : '#ff5500';
+
       ctx.save();
-      // O arco vai de -1.1 a +1.1 ao redor do ângulo atual do player
-      const arcStart = -1.1;
-      const arcEnd   =  swingArc; // segue o progresso do swing
-      ctx.strokeStyle = `rgba(255,30,0,${0.55 * arcProg})`;
-      ctx.lineWidth = 32;
       ctx.lineCap = 'round';
-      ctx.shadowColor = '#ff0000';
-      ctx.shadowBlur = 20 * arcProg;
-      ctx.beginPath();
-      ctx.arc(0, 0, player.size * 5.5, arcStart, arcEnd);
-      ctx.stroke();
-      // Borda fina brilhante por cima
-      ctx.strokeStyle = `rgba(255,180,150,${0.9 * arcProg})`;
-      ctx.lineWidth = 2;
+
+      // Camada 1 — aura grossa difusa (o "volume" do slash)
+      ctx.globalAlpha = 0.30 * arcProg;
+      ctx.strokeStyle = swingColor;
+      ctx.lineWidth = isFinisher ? 60 : 42;
+      ctx.shadowColor = swingColor; ctx.shadowBlur = 28 * arcProg;
+      ctx.beginPath(); ctx.arc(0, 0, R, a0, a1); ctx.stroke();
+
+      // Camada 2 — corpo do slash, mais vivo
+      ctx.globalAlpha = 0.70 * arcProg;
+      ctx.strokeStyle = swingColor2;
+      ctx.lineWidth = isFinisher ? 26 : 17;
+      ctx.shadowColor = swingColor2; ctx.shadowBlur = 14 * arcProg;
+      ctx.beginPath(); ctx.arc(0, 0, R, a0, a1); ctx.stroke();
+
+      // Camada 3 — borda afiada branco-quente (a "lâmina" do arco)
+      ctx.globalAlpha = 0.95 * arcProg;
+      ctx.strokeStyle = isFinisher ? 'rgba(255,255,230,1)' : 'rgba(255,210,160,0.95)';
+      ctx.lineWidth = isFinisher ? 3 : 2;
+      ctx.shadowColor = '#ffffff'; ctx.shadowBlur = 10 * arcProg;
+      ctx.beginPath(); ctx.arc(0, 0, R, a0, a1); ctx.stroke();
+
+      // Camada 4 — borda interna sutil (profundidade)
+      ctx.globalAlpha = 0.4 * arcProg;
+      ctx.strokeStyle = 'rgba(80,0,0,0.8)';
+      ctx.lineWidth = 1.2;
       ctx.shadowBlur = 0;
-      ctx.beginPath();
-      ctx.arc(0, 0, player.size * 5.5, arcStart, arcEnd);
-      ctx.stroke();
+      ctx.beginPath(); ctx.arc(0, 0, R - (isFinisher ? 14 : 9), a0, a1); ctx.stroke();
+
+      // Finisher: arco fantasma externo
+      if(isFinisher){
+        ctx.globalAlpha = 0.22 * arcProg;
+        ctx.strokeStyle = '#ff0088';
+        ctx.lineWidth = 14;
+        ctx.shadowColor = '#ff0055'; ctx.shadowBlur = 22 * arcProg;
+        ctx.beginPath(); ctx.arc(0, 0, R + 22, a0, a1); ctx.stroke();
+      }
+
       ctx.restore();
     }
 
-    // ── Placa: cabo saindo do player, cabeça na ponta ──
+    // ── Placa: posição suavizada pela direção ──
     ctx.save();
     ctx.rotate(swingArc); // gira junto com o swing
 
@@ -2448,11 +2504,22 @@ function draw(dt){
   });
 
 
-// ── GLITCH FURY: Overlay vermelho (tela levemente vermelha) ──
+// ── GLITCH FURY: Overlay vermelho pulsante com vinheta ──
   if(glitchFuryActive){
     ctx.save();
-    const glitchRed = 0.12 + Math.sin(Date.now()*0.003)*0.04;
-    ctx.fillStyle = `rgba(200,0,0,${glitchRed})`;
+    // Overlay base pulsante
+    const glitchRed = 0.10 + Math.sin(Date.now()*0.003)*0.05;
+    // Flash extra no finisher (combo=0 significa que acabou de resetar)
+    const finisherFlash = (glitchFurySwing && glitchFurySwing.isFinisher)
+      ? Math.sin((1 - glitchFurySwing.t/glitchFurySwing.maxT) * Math.PI) * 0.18
+      : 0;
+    ctx.fillStyle = `rgba(200,0,0,${glitchRed + finisherFlash})`;
+    ctx.fillRect(0,0,W,H);
+    // Vinheta vermelha nas bordas
+    const vgrd = ctx.createRadialGradient(W/2,H/2,H*0.3,W/2,H/2,H*0.8);
+    vgrd.addColorStop(0, 'rgba(120,0,0,0)');
+    vgrd.addColorStop(1, `rgba(180,0,0,${0.22 + Math.sin(Date.now()*0.002)*0.06})`);
+    ctx.fillStyle = vgrd;
     ctx.fillRect(0,0,W,H);
     ctx.restore();
   }
@@ -2585,21 +2652,85 @@ function draw(dt){
     ctx.restore();
   }
 
-  // ── GLITCH FURY SWING FLASH ──
-  if(glitchFurySwing){
-    const prog = 1 - glitchFurySwing.t / glitchFurySwing.maxT;
-    const r = 38 * (1-prog*0.4);
-    ctx.save();
-    ctx.globalAlpha = (1-prog)*0.55;
-    ctx.strokeStyle = '#ccffcc';
-    ctx.lineWidth = 3;
-    ctx.shadowColor = '#00ff88'; ctx.shadowBlur = 18;
-    ctx.beginPath();
-    ctx.arc(glitchFurySwing.x, glitchFurySwing.y, r, 0, Math.PI*2);
-    ctx.stroke();
-    ctx.shadowBlur=0;
-    ctx.restore();
+  // ── GLITCH FURY: Slash trails — rastros em arco persistindo na tela ──
+  if(glitchFurySlashes.length > 0){
+    glitchFurySlashes.forEach(sl => {
+      const frac = sl.t / sl.maxT;                        // 1→0
+      const alpha = Math.pow(frac, 0.55);                  // fade suave
+      // arco desenhado em world space: centralizado no player quando spawnado
+      ctx.save();
+      ctx.translate(sl.cx, sl.cy);                         // centro do arco
+      ctx.rotate(sl.baseAngle);                            // orientação do player
+      ctx.lineCap = 'round';
+
+      // Aura grossa que some primeiro
+      ctx.globalAlpha = alpha * 0.35 * frac;
+      ctx.strokeStyle = sl.color;
+      ctx.lineWidth = sl.isFinisher ? 55 : 38;
+      ctx.shadowColor = sl.color; ctx.shadowBlur = 20;
+      ctx.beginPath(); ctx.arc(0, 0, sl.R, sl.a0, sl.a1); ctx.stroke();
+
+      // Corpo colorido
+      ctx.globalAlpha = alpha * 0.65;
+      ctx.strokeStyle = sl.color;
+      ctx.lineWidth = sl.isFinisher ? 20 : 13;
+      ctx.shadowBlur = 10;
+      ctx.beginPath(); ctx.arc(0, 0, sl.R, sl.a0, sl.a1); ctx.stroke();
+
+      // Borda afiada branca
+      ctx.globalAlpha = alpha * 0.90;
+      ctx.strokeStyle = sl.isFinisher ? 'rgba(255,255,220,0.95)' : 'rgba(255,200,150,0.85)';
+      ctx.lineWidth = sl.isFinisher ? 2.5 : 1.8;
+      ctx.shadowColor = '#fff'; ctx.shadowBlur = 8;
+      ctx.beginPath(); ctx.arc(0, 0, sl.R, sl.a0, sl.a1); ctx.stroke();
+
+      ctx.restore();
+    });
   }
+
+  // ── GLITCH FURY: Shockwaves ──
+  if(glitchFuryShockwaves.length > 0){
+    glitchFuryShockwaves.forEach(sw => {
+      const prog = 1 - sw.t / sw.maxT;
+      const r = sw.maxR * prog;
+      const alpha = (1 - prog) * 0.75;
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.strokeStyle = sw.color;
+      ctx.lineWidth = 4 * (1 - prog);
+      ctx.shadowColor = sw.color;
+      ctx.shadowBlur = 20;
+      ctx.beginPath();
+      ctx.arc(sw.x, sw.y, r, 0, Math.PI*2);
+      ctx.stroke();
+      // Inner ring
+      ctx.globalAlpha = alpha * 0.4;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(sw.x, sw.y, r * 0.6, 0, Math.PI*2);
+      ctx.stroke();
+      ctx.restore();
+    });
+  }
+
+  // ── GLITCH FURY: Fragments ──
+  if(glitchFuryFragments.length > 0){
+    glitchFuryFragments.forEach(fr => {
+      const alpha = Math.pow(fr.t / fr.maxT, 0.7);
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = fr.color;
+      ctx.shadowColor = fr.color;
+      ctx.shadowBlur = fr.size * 3;
+      ctx.beginPath();
+      ctx.arc(fr.x, fr.y, fr.size, 0, Math.PI*2);
+      ctx.fill();
+      ctx.restore();
+    });
+  }
+
+// ── Fecha o camera shake translate ──
+  if(cameraShakeX !== 0 || cameraShakeY !== 0) ctx.restore();
 
 // Pause overlay — gerenciado via DOM (ver #pause-screen no HTML)
   if(paused){
@@ -2838,6 +2969,8 @@ function restartGame(){
   glitchFuryDarkening=false; glitchFuryDarkenAlpha=0; glitchFuryDarkenTimer=0;
   glitchFuryAwaitClick=false; glitchFuryScreamTimer=-1;
   glitchFuryAttackTimer=0; glitchFurySwing=null;
+  glitchFurySwingDir=1; glitchFuryCombo=0;
+  glitchFuryShockwaves=[]; glitchFurySlashes=[]; glitchFuryFragments=[];
   glitchFuryMessages=[]; glitchFuryMsgTimer=0;
   glitchFuryUsedDungeon=-99;
   glitchEventActive=false; glitchEventClicks=0; glitchEventOverlayAlpha=0;
@@ -2879,16 +3012,80 @@ function revivePlayer(){
 // GLITCH FURY — Funções
 // ═══════════════════════════════════════════════════════════════
 
-// Ataque com a placa (clique durante glitch fury)
+// Ataque com a placa (clique durante glitch fury) — versão épica
 function doGlitchFuryAttack(){
   if(!glitchFuryActive) return;
   if(glitchFuryAttackTimer > 0) return;
-  glitchFuryAttackTimer = 260; // mesmo cooldown da espada
-  // swing: t conta de 260 até 0, igual ao swingTimer da espada
-  glitchFurySwing = { t: 260, maxT: 260 };
-  const SIGN_DMG = 5;
-  // Hitbox baseada no ângulo do player (igual à espada), raio maior pela placa ser grande
-  const SIGN_RADIUS = 80;
+
+  const SWING_DUR = 220;
+  glitchFuryAttackTimer = SWING_DUR;
+
+  // Alterna direção a cada ataque
+  const dir = glitchFurySwingDir;
+  glitchFurySwingDir *= -1;
+  glitchFuryCombo = (glitchFuryCombo + 1) % 4;
+  const isFinisher = glitchFuryCombo === 0;
+
+  // Arco de swing vai de um lado ao outro baseado na direção
+  const arcFrom = dir > 0 ? -1.1 : 1.1;
+  const arcTo   = dir > 0 ?  1.1 : -1.1;
+  glitchFurySwing = { t: SWING_DUR, maxT: SWING_DUR, dir, arcFrom, arcTo, isFinisher };
+
+  // ── Camera shake: acumula a cada ataque ──
+  cameraShake = Math.min(cameraShake + (isFinisher ? 12 : 6), 55);
+
+  // ── Onda de choque no player ──
+  glitchFuryShockwaves.push({
+    x: player.x, y: player.y,
+    t: 300, maxT: 300,
+    maxR: isFinisher ? 130 : 90,
+    color: isFinisher ? '#ff0044' : '#ff3300'
+  });
+
+  // ── Rastros em arco (persistem na tela após o swing) ──
+  const angleBase = player.angle;
+  const slashR = player.size * 5.5;
+  // Trail principal: o arco completo do swing
+  glitchFurySlashes.push({
+    cx: player.x, cy: player.y,   // centro do arco
+    baseAngle: 0,                  // já em world space: a0/a1 incluem player.angle
+    R: slashR,
+    a0: angleBase + Math.min(arcFrom, arcTo),
+    a1: angleBase + Math.max(arcFrom, arcTo),
+    t: 340, maxT: 340,
+    color: isFinisher ? '#ff0055' : '#ff2200',
+    isFinisher
+  });
+  // Ghost trail: arco levemente maior, some mais rápido — dá profundidade
+  glitchFurySlashes.push({
+    cx: player.x, cy: player.y,
+    baseAngle: 0,
+    R: slashR + (isFinisher ? 16 : 10),
+    a0: angleBase + Math.min(arcFrom, arcTo),
+    a1: angleBase + Math.max(arcFrom, arcTo),
+    t: 180, maxT: 180,
+    color: isFinisher ? '#ff0088' : '#cc3300',
+    isFinisher
+  });
+
+  // ── Fragmentos voando ──
+  const fragColors = ['#ff0000','#ff4400','#ffaa00','#ff2244','#cc0022'];
+  const fragCount = isFinisher ? 18 : 8;
+  for(let i = 0; i < fragCount; i++){
+    const a = angleBase + (arcFrom + arcTo) * 0.5 + (Math.random()-0.5) * Math.abs(arcTo - arcFrom);
+    const spd = 2 + Math.random() * 4;
+    glitchFuryFragments.push({
+      x: player.x, y: player.y,
+      vx: Math.cos(a) * spd, vy: Math.sin(a) * spd,
+      t: 350 + Math.random()*200, maxT: 550,
+      color: fragColors[Math.floor(Math.random()*fragColors.length)],
+      size: isFinisher ? 2 + Math.random()*4 : 1.5 + Math.random()*2.5
+    });
+  }
+
+  // ── Dano nos inimigos ──
+  const SIGN_DMG = isFinisher ? 9 : 5;
+  const SIGN_RADIUS = isFinisher ? 110 : 80;
   const allEnemies = [...(slimes||[]), ...(blueSlimes||[]), ...(redSlimes||[]),
                       ...(bombHeads||[]), ...(assassinRats||[]), ...(ghosts||[]),
                       ...(golems||[])];
@@ -2896,16 +3093,26 @@ function doGlitchFuryAttack(){
     const dx = en.x - player.x, dy = en.y - player.y;
     const dist = Math.sqrt(dx*dx+dy*dy);
     if(dist > SIGN_RADIUS + en.size) return;
-    // Mesmo cone da espada (±55% de PI)
     let diff = Math.atan2(dy, dx) - player.angle;
     while(diff > Math.PI) diff -= Math.PI*2;
     while(diff < -Math.PI) diff += Math.PI*2;
-    if(Math.abs(diff) < Math.PI*0.6){
+    const coneAngle = isFinisher ? Math.PI*0.75 : Math.PI*0.6;
+    if(Math.abs(diff) < coneAngle){
       en.hp -= SIGN_DMG;
-      en.hitFlash = 200;
+      en.hitFlash = 250;
       en.killedByPlayer = true;
       spawnDamageNumber(en.x, en.y, SIGN_DMG, false);
-      addParticles(en.x, en.y, '#44ff88', 6);
+      // Knockback vermelho
+      const kbAngle = Math.atan2(dy, dx);
+      en.x += Math.cos(kbAngle) * (isFinisher ? 18 : 10);
+      en.y += Math.sin(kbAngle) * (isFinisher ? 18 : 10);
+      // Impede que o inimigo empurrado cause dano de contato imediato no player
+      if('contactCooldown' in en) en.contactCooldown = 1200;
+      player.invincible = Math.max(player.invincible, 300);
+      addParticles(en.x, en.y, '#ff2200', isFinisher ? 14 : 8);
+      addParticles(en.x, en.y, '#ff8800', isFinisher ? 6 : 3);
+      // Onda extra no inimigo atingido
+      glitchFuryShockwaves.push({ x: en.x, y: en.y, t: 200, maxT: 200, maxR: 40, color: '#ff4400' });
     }
   });
 }
@@ -3017,6 +3224,8 @@ function onDungeonStartGlitchCheck(){
     glitchFuryActive = false;
     glitchFuryMessages = [];
     glitchFurySwing = null;
+    glitchFurySwingDir = 1; glitchFuryCombo = 0;
+    glitchFuryShockwaves = []; glitchFurySlashes = []; glitchFuryFragments = [];
     if(typeof Audio !== 'undefined' && Audio.stopTrickyMusic) Audio.stopTrickyMusic();
     if(typeof Audio !== 'undefined' && Audio.playMusic) Audio.playMusic();
   }
