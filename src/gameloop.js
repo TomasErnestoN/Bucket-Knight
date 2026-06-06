@@ -238,10 +238,10 @@ function update(dt){
       const avail = GMSG_LIST.filter(m=>!already.includes(m.key));
       const pool = avail.length > 0 ? avail : GMSG_LIST;
       const pick = pool[Math.floor(Math.random()*pool.length)];
-      const px = DX + 40 + Math.random()*(DUNGEON_SIZE-80);
-      const py = DY + 40 + Math.random()*(DUNGEON_SIZE-80);
-      glitchFuryMessages.push({ key: pick.key, x: px, y: py, life: 1000, maxLife: 1000 });
-      glitchFuryMsgTimer = 5000 + Math.random()*2000;
+      const px = W/2 + (Math.random()-0.5)*(W*0.5);
+      const py = H/2 + (Math.random()-0.5)*(H*0.4);
+      glitchFuryMessages.push({ key: pick.key, x: px, y: py, life: 2000, maxLife: 2000 });
+      glitchFuryMsgTimer = 4000; // 2s visible + 2s hidden
     }
     glitchFuryMessages = glitchFuryMessages.filter(m => { m.life -= dt; return m.life > 0; });
   }
@@ -254,6 +254,25 @@ function update(dt){
     fr.y += fr.vy * dt * 0.06;
     fr.vy += 0.08 * dt * 0.06;
     return fr.t > 0;
+  });
+  // Sangue no chão: voa, pousa e fica até fury acabar
+  glitchFuryBlood = glitchFuryBlood.filter(b => {
+    b.life -= dt / b.maxLife;
+    if(!b.settled){
+      b.x += b.vx * dt * 0.07;
+      b.y += b.vy * dt * 0.07;
+      b.vy += 0.12 * dt * 0.07; // gravidade leve
+      b.vx *= Math.pow(0.88, dt * 0.06);
+      b.vy *= Math.pow(0.88, dt * 0.06);
+      const spd = Math.sqrt(b.vx*b.vx + b.vy*b.vy);
+      if(spd < 0.3){ // pousou
+        b.settled = true;
+        b.scaleX = 1.6 + Math.random()*0.8; // achata em elipse
+        b.scaleY = 0.5 + Math.random()*0.4;
+      }
+    }
+    if(!glitchFuryActive) b.life -= dt / (b.maxLife * 0.15); // some mais rápido quando fury acaba
+    return b.life > 0;
   });
 
   // ── GLITCH EVENT: fade overlay ──
@@ -437,6 +456,14 @@ function update(dt){
 
   player.trail.forEach(t=>t.life-=dt/ROLL_DURATION);
   player.trail=player.trail.filter(t=>t.life>0);
+
+  // Glitch Fury: rastro vermelho ao se mover
+  if(glitchFuryActive && (mx!==0 || my!==0)){
+    const GLITCH_TRAIL_LIFE = 220; // ms
+    glitchFuryTrail.push({x:player.x,y:player.y,a:player.angle,life:1,maxLife:GLITCH_TRAIL_LIFE});
+  }
+  glitchFuryTrail.forEach(t=>{ t.life-=dt/t.maxLife; });
+  glitchFuryTrail=glitchFuryTrail.filter(t=>t.life>0);
   if(player.hitFlash>0) player.hitFlash-=dt;
   if(player.invincible>0) player.invincible-=dt;
   if(jackpotAuraTimer>0) jackpotAuraTimer-=dt;
@@ -1260,6 +1287,49 @@ function draw(dt){
     ctx.strokeStyle=`rgba(255,220,100,${blastWave.life*0.5})`;ctx.lineWidth=4*blastWave.life;ctx.stroke();
   }
 
+  // Sangue no chão (Glitch Fury kill splatter)
+  // ── Rasgos no chão (persistem enquanto fury ativo, clipados à dungeon) ──
+  if(glitchFuryScars.length > 0){
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(DX, DY, DUNGEON_SIZE, DUNGEON_SIZE);
+    ctx.clip();
+    glitchFuryScars.forEach(sc => {
+      ctx.save();
+      ctx.translate(sc.cx, sc.cy);
+      ctx.beginPath();
+      ctx.arc(0, 0, sc.R, sc.a0, sc.a1);
+      ctx.strokeStyle = sc.isFinisher ? 'rgba(80,80,80,0.35)' : 'rgba(60,60,60,0.28)';
+      ctx.lineWidth = sc.isFinisher ? 10 : 7;
+      ctx.lineCap = 'round';
+      ctx.stroke();
+      ctx.restore();
+    });
+    ctx.restore();
+  }
+
+  glitchFuryBlood.forEach(b => {
+    const alpha = b.life * (b.settled ? 0.82 : 0.65);
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.translate(b.x, b.y);
+    if(b.settled){
+      // Elipse achatada no chão
+      ctx.scale(b.scaleX, b.scaleY);
+    }
+    // Núcleo escuro com halo vermelho
+    const grad = ctx.createRadialGradient(0,0,0, 0,0,b.r*(b.settled?1.4:1));
+    grad.addColorStop(0,   '#770000');
+    grad.addColorStop(0.5, '#cc0000');
+    grad.addColorStop(1,   'rgba(180,0,0,0)');
+    ctx.beginPath();
+    ctx.arc(0, 0, b.r*(b.settled?1.5:1), 0, Math.PI*2);
+    ctx.fillStyle = grad;
+    ctx.fill();
+    ctx.restore();
+  });
+  ctx.globalAlpha = 1;
+
   // Quivers
   quivers.forEach(q=>{
     const bob=Math.sin(q.bob)*3;
@@ -2000,6 +2070,27 @@ function draw(dt){
   // Protorobô-9500 companion
   drawCompanionRobot();
 
+  // Glitch Fury: rastro vermelho ao se mover
+  if(glitchFuryTrail.length > 0){
+    glitchFuryTrail.forEach((t,i)=>{
+      ctx.save();
+      ctx.translate(t.x, t.y);
+      ctx.rotate(t.a);
+      const alpha = t.life * 0.55;
+      const scale = 0.5 + t.life * 0.5; // encolhe enquanto some
+      ctx.globalAlpha = alpha;
+      // Brilho externo vermelho
+      ctx.shadowColor = '#ff2200';
+      ctx.shadowBlur  = 12 * t.life;
+      ctx.fillStyle   = `rgba(255,${Math.floor(30+40*t.life)},0,1)`;
+      const s = player.size * scale;
+      ctx.fillRect(-s/2, -s/2, s, s);
+      ctx.restore();
+    });
+    ctx.globalAlpha = 1;
+    ctx.shadowBlur  = 0;
+  }
+
   // Roll trail
   player.trail.forEach(t=>{
     ctx.save();ctx.translate(t.x,t.y);ctx.rotate(t.a);
@@ -2091,14 +2182,48 @@ function draw(dt){
     ctx.restore();
   }
 
+  // ── SETA BRANCA ACIMA DA CABEÇA DO PLAYER ──────────────────────────────
+  if(!playerInSpecial){
+    const arrowBob = Math.sin(Date.now() * 0.005) * 3;
+    const arrowY = player.y - player.size - 18 + arrowBob;
+    ctx.save();
+    ctx.translate(player.x, arrowY);
+    ctx.shadowColor = '#ffffff';
+    ctx.shadowBlur = 10;
+    ctx.fillStyle = '#ffffff';
+    // Seta apontando para baixo (▼)
+    ctx.beginPath();
+    ctx.moveTo(0, 10);       // ponta da seta
+    ctx.lineTo(-8, -4);
+    ctx.lineTo(-3, -4);
+    ctx.lineTo(-3, -12);
+    ctx.lineTo(3, -12);
+    ctx.lineTo(3, -4);
+    ctx.lineTo(8, -4);
+    ctx.closePath();
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.restore();
+  }
+
   ctx.save();ctx.translate(player.x,player.y);
   if(player.rolling){ctx.shadowColor='#aaaaff';ctx.shadowBlur=18;ctx.globalAlpha=0.75;}
   ctx.rotate(player.angle+(player.rolling?Math.PI/2:0));
   const flash=player.hitFlash>0&&!player.rolling;
   ctx.fillStyle='rgba(0,0,0,0.25)';
   ctx.beginPath();ctx.ellipse(3,player.size-2,player.size*0.7,player.size*0.3,0,0,Math.PI*2);ctx.fill();
+  // Glow no corpo do player nas dungeons tardias
+  if(!flash && !glitchFuryActive){
+    const _dn = currentDungeon + 1;
+    if(_dn >= 5){
+      const _gs = Math.min(1, (_dn - 4) / 5);
+      ctx.shadowColor = '#aaddff';
+      ctx.shadowBlur = 8 + _gs * 10;
+    }
+  }
   // Corpo verde se glitch fury ativo
   ctx.fillStyle=flash?'#ffffff':(glitchFuryActive?'#44ff88':'#aaaacc');ctx.fillRect(-player.size/2,-player.size/2,player.size,player.size);
+  ctx.shadowBlur=0;
   ctx.fillStyle=flash?'#ffffff':(glitchFuryActive?'#22cc66':'#8888aa');ctx.fillRect(-player.size/2+2,-player.size/2-4,player.size-4,8);
   ctx.fillStyle='#222244';ctx.fillRect(-player.size/2+3,-player.size/2-2,player.size-6,3);
   if(!activeEffect && !glitchFuryActive){ctx.fillStyle='#4444aa';ctx.fillRect(-player.size/2-6,-4,5,10);}
@@ -2514,17 +2639,39 @@ function draw(dt){
 
   // ── GLITCH FURY: Mensagens glitch flutuantes ──
   if(glitchFuryActive && glitchFuryMessages.length > 0){
+    const gt = Date.now();
     glitchFuryMessages.forEach(msg => {
-      const alpha = msg.life / msg.maxLife;
+      const frac = msg.life / msg.maxLife; // 1→0
+      // Fade in fast, hold, fade out at the end
+      const alpha = frac > 0.85 ? ((1-frac)/0.15) : (frac < 0.15 ? frac/0.15 : 1);
+      const imgKey = '_glitchImg_' + msg.key;
+      const img = window[imgKey];
+      if(!img || !img.complete || !img.naturalWidth) return;
+      const dispW = 260, dispH = 146;
+      const wobX = Math.sin(gt*0.006 + msg.x)*7;
+      const wobY = Math.cos(gt*0.004 + msg.y)*5;
+      const sc = 0.90 + Math.sin(gt*0.007 + msg.x)*0.08;
+      const pulse = 0.5 + Math.sin(gt*0.01 + msg.x)*0.5;
       ctx.save();
       ctx.globalAlpha = alpha;
-      const imgKey = '_glitchImg_' + msg.key;
-      if(window[imgKey] && window[imgKey].complete && window[imgKey].naturalWidth > 0){
-        const iw = 140, ih = 60;
-        const glitchX = Math.sin(Date.now()*0.02 + msg.x)*3;
-        const glitchY = Math.cos(Date.now()*0.015 + msg.y)*2;
-        ctx.drawImage(window[imgKey], msg.x - iw/2 + glitchX, msg.y - ih/2 + glitchY, iw, ih);
+      ctx.translate(msg.x + wobX, msg.y + wobY);
+      ctx.scale(sc, sc);
+      ctx.shadowColor = `rgba(255,0,0,${pulse})`;
+      ctx.shadowBlur = 18 + pulse*14;
+      // RGB offset glitch esporádico
+      if(Math.random() < 0.20){
+        ctx.globalAlpha = alpha * 0.35;
+        ctx.drawImage(img, -dispW/2+4, -dispH/2, dispW, dispH);
+        ctx.drawImage(img, -dispW/2-4, -dispH/2, dispW, dispH);
+        ctx.globalAlpha = alpha;
       }
+      ctx.drawImage(img, -dispW/2, -dispH/2, dispW, dispH);
+      // Borda vermelha piscando
+      ctx.shadowBlur = 0;
+      ctx.globalAlpha = alpha * (0.4 + Math.sin(gt*0.012 + msg.x)*0.3);
+      ctx.strokeStyle = '#ff2200';
+      ctx.lineWidth = 2.5;
+      ctx.strokeRect(-dispW/2-4, -dispH/2-4, dispW+8, dispH+8);
       ctx.restore();
     });
   }
@@ -2985,7 +3132,7 @@ function restartGame(){
   glitchFuryAwaitClick=false; glitchFuryScreamTimer=-1;
   glitchFuryAttackTimer=0; glitchFurySwing=null;
   glitchFurySwingDir=1; glitchFuryCombo=0;
-  glitchFuryShockwaves=[]; glitchFurySlashes=[]; glitchFuryFragments=[];
+  glitchFuryShockwaves=[]; glitchFurySlashes=[]; glitchFuryFragments=[]; glitchFuryTrail=[]; glitchFuryBlood=[]; glitchFuryScars = [];
   glitchFuryMessages=[]; glitchFuryMsgTimer=0;
   glitchFuryUsedDungeon=-99;
   glitchEventActive=false; glitchEventClicks=0; glitchEventOverlayAlpha=0;
@@ -3083,6 +3230,15 @@ function doGlitchFuryAttack(){
     isFinisher
   });
 
+  // ── Rasgo preto no chão ──
+  glitchFuryScars.push({
+    cx: player.x, cy: player.y,
+    R: slashR,
+    a0: angleBase + Math.min(arcFrom, arcTo),
+    a1: angleBase + Math.max(arcFrom, arcTo),
+    isFinisher
+  });
+
   // ── Fragmentos voando ──
   const fragColors = ['#ff0000','#ff4400','#ffaa00','#ff2244','#cc0022'];
   const fragCount = isFinisher ? 18 : 8;
@@ -3128,8 +3284,33 @@ function doGlitchFuryAttack(){
       addParticles(en.x, en.y, '#ff8800', isFinisher ? 6 : 3);
       // Onda extra no inimigo atingido
       glitchFuryShockwaves.push({ x: en.x, y: en.y, t: 200, maxT: 200, maxR: 40, color: '#ff4400' });
+      // Sangue no chão ao matar
+      if(en.hp <= 0) spawnGlitchBlood(en.x, en.y, isFinisher);
     }
   });
+}
+
+// Spawna sangue no chão ao matar inimigo com a placa (Glitch Fury)
+function spawnGlitchBlood(ex, ey, isFinisher){
+  const count = isFinisher ? 22 : 12;
+  const LIFE  = 18000; // dura 18s (até o fury acabar em geral)
+  for(let i = 0; i < count; i++){
+    const angle = Math.random() * Math.PI * 2;
+    const spd   = 1.5 + Math.random() * (isFinisher ? 5 : 3.5);
+    const r     = (isFinisher ? 3 : 2) + Math.random() * 3;
+    glitchFuryBlood.push({
+      x: ex + (Math.random()-0.5)*12,
+      y: ey + (Math.random()-0.5)*12,
+      vx: Math.cos(angle) * spd,
+      vy: Math.sin(angle) * spd,
+      r,
+      life: 1,
+      maxLife: LIFE,
+      settled: false,
+      // splat shape: elipse achatada ao parar
+      scaleX: 1, scaleY: 1,
+    });
+  }
 }
 
 // Spawna os alvos do glitch event espalhados pela tela
@@ -3195,7 +3376,7 @@ function handleGlitchEventClick(mx, my){
 // Ativar a carta Glitch Fury (usuário pressiona Q ou clica na carta)
 function useGlitchFuryCard(){
   if(!glitchFuryReady || glitchFuryActive || glitchFuryDarkening || gameOver || paused || transitioning) return;
-  if(!ownedCards.includes('glitch_fury')) return;
+  if(equippedSpecial !== 'glitch_fury') return;
   glitchFuryReady = false;
   glitchFuryCharge = 0;
   glitchFuryUsedDungeon = DUNGEON_DEFS[currentDungeon].num;
@@ -3234,13 +3415,15 @@ function startGlitchFuryEffect(){
 
 // Chamado no finishDungeonTransition para encerrar glitch fury e sortear próximo glitch
 function onDungeonStartGlitchCheck(){
+  // Sempre limpa rasgos do chão ao trocar de dungeon
+  glitchFuryScars = [];
   // Encerra o efeito fury se estava ativo
   if(glitchFuryActive){
     glitchFuryActive = false;
     glitchFuryMessages = [];
     glitchFurySwing = null;
     glitchFurySwingDir = 1; glitchFuryCombo = 0;
-    glitchFuryShockwaves = []; glitchFurySlashes = []; glitchFuryFragments = [];
+    glitchFuryShockwaves = []; glitchFurySlashes = []; glitchFuryFragments = []; glitchFuryTrail = []; glitchFuryBlood = []; glitchFuryScars = [];
     const TRICKY_FADE = 2.5; // segundos de fade out da Madness
     const MUSIC_FADE  = 3.0; // segundos de fade in da música normal
     if(typeof Audio !== 'undefined' && Audio.fadeTrickyMusicOut) Audio.fadeTrickyMusicOut(TRICKY_FADE);
@@ -3252,7 +3435,7 @@ function onDungeonStartGlitchCheck(){
   // Bloqueado se foi a dungeon imediatamente após o uso
   const thisDungeonNum = DUNGEON_DEFS[currentDungeon].num;
   const skipDungeon = glitchFuryUsedDungeon + 1;
-  if(ownedCards.includes('glitch_fury') && thisDungeonNum !== skipDungeon){
+  if(equippedSpecial === 'glitch_fury' && thisDungeonNum !== skipDungeon){
     // Chance aumenta com o nível do upgrade: L1=50%, L2=60%, L3=70%, L4=80%, L5=90%
     const glitchChanceTable = [0.5, 0.6, 0.7, 0.8, 0.9];
     const glitchLevel = (typeof specialUpgradeLevel !== 'undefined') ? specialUpgradeLevel : 1;
@@ -3280,7 +3463,7 @@ function updateGlitchFuryUI(){
   const chargeLabel = document.getElementById('special-charge-label');
   const fill = document.getElementById('special-charge-bar-fill');
   if(!slot) return;
-  if(ownedCards.includes('glitch_fury')){
+  if(equippedSpecial === 'glitch_fury'){
     // Substitui o display da carta especial
     if(icon) icon.textContent = '📛';
     if(name) name.textContent = 'GLITCH FURY';
