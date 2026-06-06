@@ -132,7 +132,7 @@ function startGame() {
   gameStarted = true;
   currentEquippedDeck = equippedDeck.filter(Boolean);
   init();
-  Audio.playMusic();
+  Audio.playDungeonMusic('blue');
   if(!gameLoopStarted){ gameLoopStarted=true; requestAnimationFrame(gameLoop); }
 }
 
@@ -691,12 +691,20 @@ function openShopScreen() {
   document.getElementById('main-menu').style.display = 'none';
   renderShopScreen();
   document.getElementById('shop-screen').style.display = 'flex';
+  if(typeof Audio !== 'undefined') {
+    if(Audio.stopLobbyMusic) Audio.stopLobbyMusic();
+    if(Audio.playShopMusic) Audio.playShopMusic();
+  }
 }
 
 function closeShopScreen() {
   _menuClick();
   document.getElementById('shop-screen').style.display = 'none';
   document.getElementById('main-menu').style.display = 'flex';
+  if(typeof Audio !== 'undefined') {
+    if(Audio.stopShopMusic) Audio.stopShopMusic();
+    if(Audio.playLobbyMusic) Audio.playLobbyMusic();
+  }
   updateMenuGold();
   writeSave();
 }
@@ -1741,12 +1749,20 @@ function openArtifactScreen() {
   updateArtifactShopGold();
   renderArtifactCollectionGrid();
   document.getElementById('artifact-screen').style.display = 'flex';
+  if(typeof Audio !== 'undefined') {
+    if(Audio.stopLobbyMusic) Audio.stopLobbyMusic();
+    if(Audio.playShopMusic) Audio.playShopMusic();
+  }
 }
 
 function closeArtifactScreen() {
   _menuClick();
   document.getElementById('artifact-screen').style.display = 'none';
   document.getElementById('main-menu').style.display = 'flex';
+  if(typeof Audio !== 'undefined') {
+    if(Audio.stopShopMusic) Audio.stopShopMusic();
+    if(Audio.playLobbyMusic) Audio.playLobbyMusic();
+  }
   updateMenuGold();
   writeSave();
 }

@@ -155,7 +155,7 @@ function startDungeonTransition(){
     glitchFuryMessages = [];
     glitchFurySwing = null;
     if(typeof Audio !== 'undefined' && Audio.stopTrickyMusic) Audio.stopTrickyMusic();
-    if(typeof Audio !== 'undefined' && Audio.playMusic) Audio.playMusic();
+    if(typeof Audio !== 'undefined' && Audio.stopDungeonMusic) Audio.stopDungeonMusic(false);
   }
   // Artifact: coxinha (heal on dungeon complete)
   if(typeof onArtifactDungeonComplete === 'function') onArtifactDungeonComplete();
@@ -183,6 +183,11 @@ function finishDungeonTransition(){
   spawnDungeonInitial();
   updateDungeonUI();
   updateBuffListDisplay();
+  // Toca a música do tema da nova dungeon
+  if(typeof Audio !== 'undefined' && Audio.playDungeonMusic) {
+    const theme = DUNGEON_DEFS[currentDungeon] ? DUNGEON_DEFS[currentDungeon].theme : 'blue';
+    Audio.playDungeonMusic(theme);
+  }
   // Reconstrói a mão ao entrar na nova dungeon
   buildHand();
   setTimeout(() => { if(typeof renderHand === 'function') renderHand(); }, 50);
