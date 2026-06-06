@@ -28,7 +28,7 @@ function writeSave() {
 let persistentGold = 0;
 let ownedCards = ['sword','meat','pistol','speed_potion','scythe'];
 let equippedDeck = ['sword','meat','pistol','speed_potion','scythe'];
-let equippedSpecial = 'black_magic';
+let equippedSpecial = null;
 let specialUpgradeLevel = 1;
 
 function getSpecialUpgradeCost(currentLevel) { return currentLevel * 200; }
@@ -40,7 +40,7 @@ function getSpecialDurationForLevel(level) { return 5000 + (level - 1) * 1250; }
     persistentGold = save.gold || 0;
     ownedCards = save.ownedCards || ['sword','meat','pistol','speed_potion','scythe'];
     equippedDeck = save.equippedDeck || ['sword','meat','pistol','speed_potion','scythe'];
-    equippedSpecial = save.equippedSpecial || 'black_magic';
+    equippedSpecial = save.equippedSpecial || null;
     specialUpgradeLevel = save.specialUpgradeLevel || 1;
     while(equippedDeck.length < 5) equippedDeck.push('');
   }
@@ -126,7 +126,7 @@ function startGame() {
   _menuClick();
   document.getElementById('main-menu').style.display = 'none';
   document.getElementById('ui').style.display = 'block';
-  if(ownedCards.includes('black_magic') || ownedCards.includes('glitch_fury')){
+  if(equippedSpecial){
     document.getElementById('special-card-slot').style.display = 'flex';
   }
   gameStarted = true;
@@ -430,32 +430,45 @@ function renderDeckScreen() {
     slotArea.appendChild(div);
   }
 
-  // ── Slot especial ──
+  // ── Slot especial (drop target) ──
   const specialArea = document.getElementById('deck-special-area');
   if(specialArea){
     specialArea.innerHTML = '';
-    const specialOwned = ownedCards.filter(id => {
-      const def = CARD_DEFS_STATIC[id]; return def && def.rarity === 'especial';
-    });
-    if(specialOwned.length === 0){
-      specialArea.innerHTML = `<div style="width:80px;height:112px;border:2px dashed #661144;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#441133;font-size:10px;text-align:center;padding:4px">Compre na loja</div>`;
-    } else {
-      specialOwned.forEach(id => {
-        const def = CARD_DEFS_STATIC[id];
-        const isEquipped = equippedSpecial === id;
-        const d = document.createElement('div');
-        d.className = `coll-card rarity-especial${isEquipped?' in-deck':''}`;
-        d.style.border = '2px solid #ff2288'; d.style.cursor = 'pointer';
-        d.innerHTML = `
-          <div style="font-size:28px;margin-bottom:4px">${def.icon}</div>
-          <div style="font-size:8px;text-align:center;color:#ff88cc;font-weight:bold">${def.name}</div>
-          <div style="font-size:7px;margin-top:2px;color:#ff2288">ESPECIAL</div>
-          <div style="font-size:7px;color:${isEquipped?'#ff2288':'#555577'};margin-top:3px">${isEquipped?'✓ equipada':'desequipada'}</div>
-          <div style="font-size:8px;color:#884466;margin-top:4px">clique ▸ detalhes</div>`;
-        d.onclick = () => openCardModal(id, 'special');
-        specialArea.appendChild(d);
+    const slotDiv = document.createElement('div');
+    if(equippedSpecial){
+      const def = CARD_DEFS_STATIC[equippedSpecial];
+      slotDiv.className = 'deck-slot filled rarity-especial';
+      slotDiv.innerHTML = `
+        <div style="font-size:28px;margin-bottom:4px">${def.icon}</div>
+        <div style="font-size:8px;text-align:center;color:#ff88cc;font-weight:bold">${def.name}</div>
+        <div style="font-size:7px;margin-top:2px;color:#ff2288">ESPECIAL</div>
+        <div style="font-size:7px;color:#555577;margin-top:3px">arraste ▸ coleção</div>`;
+      slotDiv.style.cursor = 'pointer';
+      slotDiv.onclick = () => openCardModal(equippedSpecial, 'special');
+      slotDiv.draggable = true;
+      slotDiv.addEventListener('dragstart', () => {
+        _dragId = equippedSpecial; _dragFromSlot = 'special';
+        setTimeout(() => slotDiv.classList.add('dragging'), 0);
       });
+      slotDiv.addEventListener('dragend', () => {
+        slotDiv.classList.remove('dragging'); _dragId = null; _dragFromSlot = null;
+      });
+    } else {
+      slotDiv.className = 'deck-slot empty-slot';
+      slotDiv.innerHTML = `<div style="font-size:20px">✦</div><div style="font-size:8px;margin-top:4px;color:#661144">especial</div>`;
     }
+    slotDiv.addEventListener('dragover', (e) => { e.preventDefault(); slotDiv.classList.add('drag-over'); });
+    slotDiv.addEventListener('dragleave', () => slotDiv.classList.remove('drag-over'));
+    slotDiv.addEventListener('drop', (e) => {
+      e.preventDefault(); slotDiv.classList.remove('drag-over');
+      if(!_dragId) return;
+      const defIncoming = CARD_DEFS_STATIC[_dragId];
+      if(!defIncoming || defIncoming.rarity !== 'especial') return;
+      equippedSpecial = _dragId;
+      _dragId = null; _dragFromSlot = null;
+      renderDeckScreen(); writeSave();
+    });
+    specialArea.appendChild(slotDiv);
   }
 
   // ── Coleção de cartas ──
@@ -467,36 +480,43 @@ function renderDeckScreen() {
   });
   collArea.addEventListener('drop', (e) => {
     e.preventDefault(); collArea.classList.remove('drag-over-coll');
-    if(_dragFromSlot !== null && _dragId){
-      equippedDeck[_dragFromSlot] = ''; _dragId = null; _dragFromSlot = null;
-      renderDeckScreen(); writeSave();
+    if(_dragId){
+      if(_dragFromSlot === 'special'){
+        equippedSpecial = null; _dragId = null; _dragFromSlot = null;
+        renderDeckScreen(); writeSave();
+      } else if(_dragFromSlot !== null){
+        equippedDeck[_dragFromSlot] = ''; _dragId = null; _dragFromSlot = null;
+        renderDeckScreen(); writeSave();
+      }
     }
   });
   ownedCards.forEach(id => {
     const def = CARD_DEFS_STATIC[id];
-    if(def && def.rarity === 'especial') return;
     const rarDef = RARITIES_STATIC[def.rarity];
-    const deckCount = equippedDeck.filter(x=>x===id).length;
-    const ownCount  = ownedCards.filter(x=>x===id).length;
-    const alreadyMaxed = deckCount >= ownCount;
+    const isSpecial = def.rarity === 'especial';
+    // Para especiais: "equipada" = equippedSpecial === id. Para normais: contagem no deck.
+    const alreadyMaxed = isSpecial
+      ? equippedSpecial === id
+      : equippedDeck.filter(x=>x===id).length >= ownedCards.filter(x=>x===id).length;
+    const canDrag = !alreadyMaxed;
     const div = document.createElement('div');
     div.className = `coll-card rarity-${def.rarity}${alreadyMaxed?' in-deck':''}`;
     div.innerHTML = `
       <div style="font-size:28px;margin-bottom:4px">${def.icon}</div>
-      <div style="font-size:8px;text-align:center;color:#e0e0ff">${def.name}</div>
-      <div style="font-size:9px;color:#88aaff;margin-top:2px">💧 ${def.mana}</div>
+      <div style="font-size:8px;text-align:center;color:${isSpecial?'#ff88cc':'#e0e0ff'}">${def.name}</div>
+      <div style="font-size:9px;color:#88aaff;margin-top:2px">${isSpecial?'ESPECIAL':'💧 '+def.mana}</div>
       <div style="font-size:7px;margin-top:2px" class="rarity-label-${def.rarity}">${rarDef.label}</div>
-      ${!alreadyMaxed
-        ? '<div style="font-size:8px;color:#557755;margin-top:4px">arraste ▸ slot</div><div style="font-size:8px;color:#445566;margin-top:1px">clique ▸ detalhes</div>'
+      ${canDrag
+        ? `<div style="font-size:8px;color:#557755;margin-top:4px">arraste ▸ ${isSpecial?'slot especial':'slot'}</div>`
         : '<div style="font-size:7px;color:#444466;margin-top:5px">equipada</div>'}`;
-    if(!alreadyMaxed){
+    if(canDrag){
       div.draggable = true;
       div.addEventListener('dragstart', () => {
         _dragId = id; _dragFromSlot = null; setTimeout(() => div.classList.add('dragging'), 0);
       });
       div.addEventListener('dragend', () => { div.classList.remove('dragging'); _dragId = null; });
     }
-    div.onclick = () => openCardModal(id, 'collection');
+    div.onclick = () => openCardModal(id, isSpecial ? 'special' : 'collection');
     collArea.appendChild(div);
   });
 
@@ -681,35 +701,179 @@ function closeShopScreen() {
   writeSave();
 }
 
+// ── Estado dos filtros da loja ──
+let _shopFilter = 'all';
+let _shopSort = 'default';
+let _shopSearch = '';
+
+function setShopFilter(f, btn) {
+  _shopFilter = f;
+  document.querySelectorAll('.shop-filter-btn').forEach(b => b.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+  renderShopGrid();
+}
+
+function clearShopSearch() {
+  _shopSearch = '';
+  _shopFilter = 'all';
+  document.querySelectorAll('.shop-filter-btn').forEach(b => b.classList.remove('active'));
+  const allBtn = document.querySelector('.shop-filter-btn[data-filter="all"]');
+  if(allBtn) allBtn.classList.add('active');
+  const inp = document.getElementById('shop-search');
+  if(inp) inp.value = '';
+  const clr = document.getElementById('shop-search-clear');
+  if(clr) clr.style.display = 'none';
+  renderShopGrid();
+}
+
+function filterShop() {
+  const inp = document.getElementById('shop-search');
+  const sort = document.getElementById('shop-sort');
+  _shopSearch = inp ? inp.value.trim().toLowerCase() : '';
+  _shopSort = sort ? sort.value : 'default';
+  const clr = document.getElementById('shop-search-clear');
+  if(clr) clr.style.display = _shopSearch ? 'block' : 'none';
+  renderShopGrid();
+}
+
+function _buildShopCard(id, animIdx) {
+  const def = CARD_DEFS_STATIC[id];
+  const rarDef = RARITIES_STATIC[def.rarity];
+  const price = CARD_PRICES[def.rarity];
+  const atMax = ownedCards.includes(id);
+  const cantAfford = persistentGold < price;
+  const div = document.createElement('div');
+  let cls = `shop-card rarity-${def.rarity}`;
+  if(atMax) cls += ' owned'; else if(cantAfford) cls += ' cant-afford';
+  div.className = cls;
+  div.style.animationDelay = (animIdx * 0.04) + 's';
+  div.innerHTML = `
+    <div style="font-size:36px;margin-bottom:6px;line-height:1">${def.icon}</div>
+    <div style="font-size:9px;text-align:center;color:#e0e0ff;font-weight:bold;letter-spacing:1px;font-family:'Courier New',monospace;margin-bottom:2px">${def.name}</div>
+    <div style="font-size:8px;color:#6688cc;margin-top:2px;letter-spacing:0.5px">💧 ${def.mana} mana</div>
+    <div style="font-size:8px;margin-top:3px;letter-spacing:1px" class="rarity-label-${def.rarity}">${rarDef.label}</div>
+    <div class="shop-price${atMax?' owned-price':''}">${atMax ? '✓ Possuída' : '🪙 '+price}</div>`;
+  if(!atMax && !cantAfford) div.onclick = () => buyCard(id, price);
+  else div.onclick = () => { if(typeof Audio !== 'undefined' && Audio.menuError) Audio.menuError(); };
+  div.addEventListener('mouseenter', (e) => showTooltip(e, id));
+  div.addEventListener('mousemove', moveTooltip);
+  div.addEventListener('mouseleave', hideTooltip);
+  return div;
+}
+
+function _sortEntries(entries) {
+  const arr = [...entries];
+  const rarOrder = { comum:0, raro:1, epico:2, lendario:3, especial:4 };
+  switch(_shopSort) {
+    case 'price-asc':  return arr.sort((a,b) => CARD_PRICES[CARD_DEFS_STATIC[a.id].rarity] - CARD_PRICES[CARD_DEFS_STATIC[b.id].rarity]);
+    case 'price-desc': return arr.sort((a,b) => CARD_PRICES[CARD_DEFS_STATIC[b.id].rarity] - CARD_PRICES[CARD_DEFS_STATIC[a.id].rarity]);
+    case 'mana-asc':   return arr.sort((a,b) => CARD_DEFS_STATIC[a.id].mana - CARD_DEFS_STATIC[b.id].mana);
+    case 'mana-desc':  return arr.sort((a,b) => CARD_DEFS_STATIC[b.id].mana - CARD_DEFS_STATIC[a.id].mana);
+    case 'name':       return arr.sort((a,b) => CARD_DEFS_STATIC[a.id].name.localeCompare(CARD_DEFS_STATIC[b.id].name));
+    default: return arr;
+  }
+}
+
+function _updateShopCounts() {
+  const rarities = ['comum','raro','epico','lendario','especial'];
+  let all = SHOP_CATALOG.length;
+  let owned = ownedCards.filter(id => SHOP_CATALOG.find(e=>e.id===id)).length;
+  document.getElementById('sc-all').textContent = all;
+  document.getElementById('sc-owned').textContent = owned;
+  rarities.forEach(r => {
+    const el = document.getElementById('sc-'+r);
+    if(el) el.textContent = SHOP_CATALOG.filter(e => CARD_DEFS_STATIC[e.id].rarity===r).length;
+  });
+  // Stats pill
+  const statsEl = document.getElementById('shop-stats');
+  if(statsEl) {
+    const canAfford = SHOP_CATALOG.filter(e => {
+      const d = CARD_DEFS_STATIC[e.id];
+      return !ownedCards.includes(e.id) && persistentGold >= CARD_PRICES[d.rarity];
+    }).length;
+    const total = SHOP_CATALOG.length;
+    statsEl.innerHTML = `
+      <div class="shop-stat-pill"><span>${owned}</span>/${total} possuídas</div>
+      <div class="shop-stat-pill"><span>${canAfford}</span> compráveis agora</div>`;
+  }
+}
+
+function renderShopGrid() {
+  const secWrap = document.getElementById('shop-sections-wrap');
+  const flatGrid = document.getElementById('shop-grid');
+  const emptyMsg = document.getElementById('shop-empty-msg');
+  secWrap.innerHTML = '';
+  flatGrid.innerHTML = '';
+
+  // Filtrar entradas
+  let entries = SHOP_CATALOG.filter(e => {
+    const def = CARD_DEFS_STATIC[e.id];
+    if(_shopSearch && !def.name.toLowerCase().includes(_shopSearch) && !e.id.includes(_shopSearch)) return false;
+    if(_shopFilter === 'owned') return ownedCards.includes(e.id);
+    if(_shopFilter !== 'all') return def.rarity === _shopFilter;
+    return true;
+  });
+
+  const sorted = _sortEntries(entries);
+  const useFlat = _shopSearch || _shopFilter !== 'all' || _shopSort !== 'default';
+
+  if(sorted.length === 0) {
+    emptyMsg.style.display = 'block';
+    secWrap.style.display = 'none';
+    flatGrid.style.display = 'none';
+    return;
+  }
+  emptyMsg.style.display = 'none';
+
+  if(useFlat) {
+    secWrap.style.display = 'none';
+    flatGrid.style.display = 'flex';
+    sorted.forEach((e, i) => flatGrid.appendChild(_buildShopCard(e.id, i)));
+  } else {
+    flatGrid.style.display = 'none';
+    secWrap.style.display = 'block';
+    const rarOrder = ['comum','raro','epico','lendario','especial'];
+    const rarLabels = { comum:'COMUM', raro:'RARO', epico:'ÉPICO', lendario:'LENDÁRIO', especial:'ESPECIAL' };
+    let animIdx = 0;
+    rarOrder.forEach(r => {
+      const group = sorted.filter(e => CARD_DEFS_STATIC[e.id].rarity === r);
+      if(!group.length) return;
+      const sec = document.createElement('div');
+      sec.className = `shop-section section-${r}`;
+      const header = document.createElement('div');
+      header.className = 'shop-section-header';
+      const ownedInGroup = group.filter(e => ownedCards.includes(e.id)).length;
+      header.innerHTML = `
+        <div class="shop-section-label">${rarLabels[r]}</div>
+        <div class="shop-section-bar"></div>
+        <div class="shop-section-count">${ownedInGroup}/${group.length} possuídas</div>`;
+      const grid = document.createElement('div');
+      grid.className = 'shop-grid';
+      group.forEach(e => { grid.appendChild(_buildShopCard(e.id, animIdx)); animIdx++; });
+      sec.appendChild(header);
+      sec.appendChild(grid);
+      secWrap.appendChild(sec);
+    });
+  }
+}
+
 function renderShopScreen() {
   document.getElementById('shop-gold').textContent = '🪙 ' + persistentGold;
-  const grid = document.getElementById('shop-grid');
-  grid.innerHTML = '';
-  SHOP_CATALOG.forEach(entry => {
-    const id = entry.id;
-    const def = CARD_DEFS_STATIC[id];
-    const rarDef = RARITIES_STATIC[def.rarity];
-    const price = CARD_PRICES[def.rarity];
-    const atMax = ownedCards.includes(id);
-    const cantAfford = persistentGold < price;
-    const div = document.createElement('div');
-    let cls = `shop-card rarity-${def.rarity}`;
-    if(atMax) cls += ' owned'; else if(cantAfford) cls += ' cant-afford';
-    div.className = cls;
-    div.innerHTML = `
-      <div style="font-size:32px;margin-bottom:6px">${def.icon}</div>
-      <div style="font-size:9px;text-align:center;color:#e0e0ff;font-weight:bold">${def.name}</div>
-      <div style="font-size:8px;color:#88aaff;margin-top:3px">💧 ${def.mana}</div>
-      <div style="font-size:8px;margin-top:2px" class="rarity-label-${def.rarity}">${rarDef.label}</div>
-      <div class="shop-price">${atMax ? '✓ Possuída' : '🪙 '+price}</div>`;
-    if(!atMax && !cantAfford) div.onclick = () => buyCard(id, price);
-    else div.onclick = () => { if(typeof Audio !== 'undefined' && Audio.menuError) Audio.menuError(); };
-    div.addEventListener('mouseenter', (e) => showTooltip(e, id));
-    div.addEventListener('mousemove', moveTooltip);
-    div.addEventListener('mouseleave', hideTooltip);
-    grid.appendChild(div);
-  });
+  _updateShopCounts();
+  // Resetar estado dos filtros ao abrir
+  _shopFilter = 'all';
+  _shopSort = 'default';
+  _shopSearch = '';
+  const inp = document.getElementById('shop-search');
+  if(inp) inp.value = '';
+  const sortEl = document.getElementById('shop-sort');
+  if(sortEl) sortEl.value = 'default';
+  document.querySelectorAll('.shop-filter-btn').forEach(b => b.classList.remove('active'));
+  const allBtn = document.querySelector('.shop-filter-btn[data-filter="all"]');
+  if(allBtn) allBtn.classList.add('active');
+  renderShopGrid();
 }
+
 
 function buyCard(id, price) {
   if(persistentGold < price || ownedCards.includes(id)) {
@@ -719,10 +883,11 @@ function buyCard(id, price) {
   persistentGold -= price;
   ownedCards.push(id);
   _menuClick();
-  const def = CARD_DEFS_STATIC[id];
-  if(def && def.rarity === 'especial') equippedSpecial = id;
   writeSave();
-  renderShopScreen();
+  // Atualiza ouro, contadores e grid sem resetar filtros
+  document.getElementById('shop-gold').textContent = '🪙 ' + persistentGold;
+  _updateShopCounts();
+  renderShopGrid();
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -931,7 +1096,7 @@ function eraseData() {
   persistentGold = 0;
   ownedCards = [...DEFAULT_CARDS];
   equippedDeck = [...DEFAULT_CARDS];
-  equippedSpecial = 'black_magic';
+  equippedSpecial = null;
   specialUpgradeLevel = 1;
   ownedArtifacts = [];
   equippedArtifacts = [];
@@ -990,10 +1155,10 @@ document.addEventListener('keydown', (e) => {
     alert('💰 +10.000 moedas'); cheatBuffer = '';
   }
   if(isPaused && cheatBuffer.includes('super')){
-    if(ownedCards.includes('glitch_fury')){
+    if(equippedSpecial === 'glitch_fury'){
       glitchFuryCharge = 3; glitchFuryReady = true;
       if(typeof updateGlitchFuryUI === 'function') updateGlitchFuryUI();
-    } else {
+    } else if(equippedSpecial === 'black_magic'){
       specialChargeKills = SPECIAL_CHARGE_GOAL; specialReady = true;
       updateSpecialCardUI();
     }
