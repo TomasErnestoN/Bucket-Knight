@@ -128,7 +128,7 @@ function registerKill(){
   if(typeof onArtifactKill === 'function') onArtifactKill();
   updateDungeonUI();
   // Charge special card
-  if(!specialReady && ownedCards.includes('black_magic')){
+  if(!specialReady && equippedSpecial === 'black_magic'){
     specialChargeKills++;
     if(specialChargeKills >= SPECIAL_CHARGE_GOAL){
       specialChargeKills = SPECIAL_CHARGE_GOAL;

@@ -221,21 +221,30 @@ function updateSecondaryEffectDisplay(){ updateNecroDisplay(); }
 function updateSpecialCardUI(){
   const slot = document.getElementById('special-card-slot');
   if(!slot) return;
+  // Sync icon and name to equippedSpecial
+  const iconEl = document.getElementById('special-card-icon');
+  const nameEl = document.getElementById('special-card-name');
+  if(iconEl && nameEl){
+    if(equippedSpecial === 'glitch_fury'){ iconEl.textContent = '📛'; nameEl.textContent = 'GLITCH FURY'; }
+    else if(equippedSpecial === 'black_magic'){ iconEl.textContent = '🌑'; nameEl.textContent = 'MAGIA NEGRA'; }
+  }
   const card = document.getElementById('special-card');
   const fill = document.getElementById('special-charge-bar-fill');
   const label = document.getElementById('special-charge-label');
   const sub = document.getElementById('special-card-sub');
-  const pct = Math.min(1, specialChargeKills / SPECIAL_CHARGE_GOAL) * 100;
+  const pct = equippedSpecial === 'black_magic' ? Math.min(1, specialChargeKills / SPECIAL_CHARGE_GOAL) * 100 : 0;
   fill.style.width = pct + '%';
   label.textContent = specialActive
     ? `⚡ ${Math.ceil(specialTimer/1000)}s`
-    : `${specialChargeKills} / ${SPECIAL_CHARGE_GOAL}`;
+    : equippedSpecial === 'black_magic' ? `${specialChargeKills} / ${SPECIAL_CHARGE_GOAL}` : '';
   // Update duration label dynamically
   if(sub){
-    const durSec = (getSpecialDuration()/1000).toFixed(2).replace(/\.?0+$/,'');
-    const lvl = (typeof specialUpgradeLevel !== 'undefined') ? specialUpgradeLevel : 1;
-    const stars = '★'.repeat(lvl);
-    sub.textContent = `${durSec}s · laser · ${stars}`;
+    if(equippedSpecial === 'black_magic'){
+      const durSec = (getSpecialDuration()/1000).toFixed(2).replace(/\.?0+$/,'');
+      const lvl = (typeof specialUpgradeLevel !== 'undefined') ? specialUpgradeLevel : 1;
+      const stars = '★'.repeat(lvl);
+      sub.textContent = `${durSec}s · laser · ${stars}`;
+    }
   }
   if(specialActive){
     card.className = 'active-special';
@@ -247,13 +256,13 @@ function updateSpecialCardUI(){
 }
 
 function useSpecialCard(){
-  // Glitch fury has its own special card slot
-  if(ownedCards.includes('glitch_fury')){
+  // Route to correct special based on equippedSpecial
+  if(equippedSpecial === 'glitch_fury'){
     if(typeof useGlitchFuryCard === 'function') useGlitchFuryCard();
     return;
   }
   if(!specialReady || specialActive || gameOver || paused || transitioning) return;
-  if(!ownedCards.includes('black_magic')) return;
+  if(equippedSpecial !== 'black_magic') return;
   Audio.specialActivate();
   specialReady = false;
   specialChargeKills = 0;

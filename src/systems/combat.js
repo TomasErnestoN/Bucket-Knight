@@ -819,19 +819,22 @@ function drawSniperMinigame() {
     const elapsed = now - t.spawnTime;
     const frac = elapsed / t.duration;
     const s = t.scale;
-    const r = 40 * s;
+    const r = 62 * s;
 
     ctx.save();
     ctx.translate(t.x, t.y);
     ctx.rotate(t.angle);
     ctx.globalAlpha = 0.85 + Math.sin(now * 0.01) * 0.1;
 
-    // Círculo de tempo (arco que encolhe)
+    // Círculo de tempo (arco que encolhe) — branco
     ctx.beginPath();
-    ctx.arc(0, 0, r + 12, -Math.PI/2, -Math.PI/2 + Math.PI*2*(1-frac));
-    ctx.strokeStyle = frac > 0.6 ? '#ff2200' : '#ff8800';
-    ctx.lineWidth = 4;
+    ctx.arc(0, 0, r + 16, -Math.PI/2, -Math.PI/2 + Math.PI*2*(1-frac));
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 5;
+    ctx.shadowColor = '#ffffff';
+    ctx.shadowBlur = 8;
     ctx.stroke();
+    ctx.shadowBlur = 0;
 
     // Desenha a mira (crosshair) usando a imagem Mira.png
     if(window._sniperMiraImg && window._sniperMiraImg.complete) {
@@ -839,15 +842,15 @@ function drawSniperMinigame() {
     } else {
       // Fallback desenhado
       ctx.strokeStyle = '#ff2200';
-      ctx.lineWidth = 3 * s;
+      ctx.lineWidth = 4 * s;
       ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI*2); ctx.stroke();
       ctx.beginPath(); ctx.arc(0, 0, r*0.35, 0, Math.PI*2); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(-r*1.3, 0); ctx.lineTo(-r*0.5, 0); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(r*0.5, 0); ctx.lineTo(r*1.3, 0); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(0, -r*1.3); ctx.lineTo(0, -r*0.5); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(0, r*0.5); ctx.lineTo(0, r*1.3); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(-r*1.4, 0); ctx.lineTo(-r*0.5, 0); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(r*0.5, 0); ctx.lineTo(r*1.4, 0); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0, -r*1.4); ctx.lineTo(0, -r*0.5); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0, r*0.5); ctx.lineTo(0, r*1.4); ctx.stroke();
       ctx.fillStyle = '#ff2200';
-      ctx.beginPath(); ctx.arc(0, 0, 5*s, 0, Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(0, 0, 7*s, 0, Math.PI*2); ctx.fill();
     }
 
     ctx.restore();
