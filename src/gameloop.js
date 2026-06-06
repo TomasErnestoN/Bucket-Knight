@@ -2901,13 +2901,13 @@ function draw(dt){
 function showPauseScreen() {
   updatePauseSoundLabel();
   document.getElementById('pause-screen').style.display = 'flex';
-  Audio.pauseMusic();
+  Audio.pauseDungeonMusic();
   if(typeof Audio.pauseTrickyMusic === 'function') Audio.pauseTrickyMusic();
 }
 
 function hidePauseScreen() {
   document.getElementById('pause-screen').style.display = 'none';
-  Audio.resumeMusic();
+  Audio.resumeDungeonMusic();
   if(typeof Audio.resumeTrickyMusic === 'function') Audio.resumeTrickyMusic();
 }
 
@@ -2931,13 +2931,13 @@ function resumeFromPause() {
 function pauseBackToMenu() {
   paused = false;
   hidePauseScreen();
-  Audio.stopMusic();
+  Audio.stopDungeonMusic(false);
   if(typeof Audio !== 'undefined' && Audio.playLobbyMusic) Audio.playLobbyMusic();
   restartGame();
 }
 
 document.addEventListener('keydown',e=>{
-  if(e.key==='Backspace'&&!gameOver&&!transitioning){
+  if(e.key==='Escape'&&gameStarted&&!gameOver&&!transitioning&&!buffScreenActive){
     paused=!paused;
     if(paused) showPauseScreen(); else hidePauseScreen();
     e.preventDefault(); return;
@@ -3142,7 +3142,7 @@ function restartGame(){
   writeSave();
   updateMenuGold();
   document.getElementById('gameover').style.display='none';
-  Audio.stopMusic();
+  Audio.stopDungeonMusic(false);
   goToMenu();
 }
 
@@ -3382,7 +3382,7 @@ function useGlitchFuryCard(){
   glitchFuryUsedDungeon = DUNGEON_DEFS[currentDungeon].num;
 
   // Para música e começa fade para preto
-  if(typeof Audio !== 'undefined' && Audio.stopMusic) Audio.stopMusic();
+  if(typeof Audio !== 'undefined' && Audio.stopDungeonMusic) Audio.stopDungeonMusic(false);
 
   glitchFuryDarkening = true;
   glitchFuryDarkenTimer = 0;
@@ -3407,7 +3407,7 @@ function useGlitchFuryCard(){
 function startGlitchFuryEffect(){
   glitchFuryAwaitClick = false;
   if(typeof Audio !== 'undefined' && Audio.playTrickyMusic) Audio.playTrickyMusic();
-  if(typeof Audio !== 'undefined' && Audio.stopMusic) Audio.stopMusic();
+  if(typeof Audio !== 'undefined' && Audio.stopDungeonMusic) Audio.stopDungeonMusic(false);
   glitchFuryScreamTimer = 9000;
   glitchFuryDarkenAlpha = 1;
   glitchFuryDarkening = false;
@@ -3428,7 +3428,10 @@ function onDungeonStartGlitchCheck(){
     const MUSIC_FADE  = 3.0; // segundos de fade in da música normal
     if(typeof Audio !== 'undefined' && Audio.fadeTrickyMusicOut) Audio.fadeTrickyMusicOut(TRICKY_FADE);
     setTimeout(() => {
-      if(typeof Audio !== 'undefined' && Audio.playMusic) Audio.playMusic(0, { fadeIn: MUSIC_FADE });
+      if(typeof Audio !== 'undefined' && Audio.playDungeonMusic) {
+        const theme = DUNGEON_DEFS[currentDungeon] ? DUNGEON_DEFS[currentDungeon].theme : 'blue';
+        Audio.playDungeonMusic(theme);
+      }
     }, TRICKY_FADE * 1000);
   }
   // Sorteia se um glitch vai aparecer nesta dungeon

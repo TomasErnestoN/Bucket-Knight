@@ -338,6 +338,10 @@ function pickBuffChoices(n = 4) {
 function showBuffScreen(dungeonNum) {
   buffScreenActive = true;
   paused = true;
+  if(typeof Audio !== 'undefined' && Audio.playBuffMusic) {
+    Audio.stopDungeonMusic(false);
+    Audio.playBuffMusic();
+  }
 
   // Determina quantos picks o jogador tem
   const isPhaseTransition = PHASE_TRANSITION_DUNGEONS.has(dungeonNum);
@@ -430,6 +434,7 @@ function applyBuff(id, dungeonNum, isPhaseTransition) {
     document.getElementById('buff-screen').style.display = 'none';
     buffScreenActive = false;
     paused = false;
+    if(typeof Audio !== 'undefined' && Audio.stopBuffMusic) Audio.stopBuffMusic();
     // Reset header style
     const h2 = document.querySelector('#buff-screen h2');
     if(h2) { h2.textContent = '✨ ESCOLHA UM BUFF'; h2.style.color = ''; }
