@@ -203,10 +203,244 @@ const Audio = (() => {
     _jackpotSource.onended = () => {
       _jackpotSource = null;
       if (_jackpotFadeTimer) { clearTimeout(_jackpotFadeTimer); _jackpotFadeTimer = null; }
-      // Volta música tema do ponto salvo
-      playMusic(_musicOffset);
+      // Volta música tema do ponto salvo (usa playDungeonMusic se já definido)
+      if (typeof playDungeonMusic === 'function') playDungeonMusic(_currentTheme);
+      else playMusic(_musicOffset);
     };
   }
+  // ─────────────────────────────────────────────────────────────
+
+  // ── MÚSICA DE LOJA / ARTEFATOS ───────────────────────────────
+  let _shopBuffer = null;
+  let _shopRawBuffer = null;
+  let _shopSource = null;
+  let _shopGain = null;
+  let _shopLoaded = false;
+  let _shopPlaying = false;
+  let _shopPlayPending = false;
+  let _shopKilled = false;
+  let _shopOffset = 0;
+  let _shopStartedAt = 0;
+
+  function _loadShopMusic() {
+    if (_shopLoaded) return;
+    _shopLoaded = true;
+    fetch('./assets/audio/shop_music.ogg')
+      .then(r => r.arrayBuffer())
+      .then(buf => {
+        _shopRawBuffer = buf;
+        if (ctx) {
+          ctx.decodeAudioData(buf.slice(0), decoded => {
+            _shopBuffer = decoded;
+            if (_shopPlayPending && !_shopKilled) { _shopPlayPending = false; playShopMusic(); }
+            else { _shopPlayPending = false; }
+          });
+        }
+      })
+      .catch(() => {});
+  }
+
+  function _decodeShopWhenReady() {
+    if (!_shopRawBuffer || _shopBuffer) return;
+    ctx.decodeAudioData(_shopRawBuffer.slice(0), decoded => {
+      _shopBuffer = decoded;
+      if (_shopPlayPending && !_shopKilled) { _shopPlayPending = false; playShopMusic(); }
+      else { _shopPlayPending = false; }
+    });
+  }
+
+  function playShopMusic() {
+    _shopKilled = false;
+    if (!_shopBuffer) { _shopPlayPending = true; return; }
+    if (!ctx || _shopPlaying) return;
+    if (!_shopGain) {
+      _shopGain = ctx.createGain();
+      _shopGain.gain.value = 0;
+      _shopGain.connect(masterGain);
+    }
+    _shopSource = ctx.createBufferSource();
+    _shopSource.buffer = _shopBuffer;
+    _shopSource.loop = true;
+    _shopSource.connect(_shopGain);
+    const startOffset = _shopOffset % _shopBuffer.duration;
+    _shopSource.start(0, startOffset);
+    _shopStartedAt = ctx.currentTime - startOffset;
+    _shopPlaying = true;
+    const t = ctx.currentTime;
+    _shopGain.gain.cancelScheduledValues(t);
+    _shopGain.gain.setValueAtTime(0, t);
+    _shopGain.gain.linearRampToValueAtTime(muted ? 0 : 0.55, t + 1.0);
+  }
+
+  function stopShopMusic() {
+    _shopPlayPending = false;
+    _shopKilled = true;
+    if (_shopSource) {
+      if (_shopPlaying && _shopBuffer) {
+        _shopOffset = (ctx.currentTime - _shopStartedAt) % _shopBuffer.duration;
+      }
+      if (_shopGain) {
+        const t = ctx ? ctx.currentTime : 0;
+        _shopGain.gain.cancelScheduledValues(t);
+        _shopGain.gain.setValueAtTime(0, t);
+      }
+      try { _shopSource.disconnect(); } catch(e) {}
+      try { _shopSource.stop(); } catch(e) {}
+      _shopSource = null;
+    }
+    _shopPlaying = false;
+  }
+  // ─────────────────────────────────────────────────────────────
+
+  // ── MÚSICAS DE DUNGEON POR TEMA ───────────────────────────────
+  // Fábrica para criar um sistema de música idêntico ao principal,
+  // mas apontando para um arquivo diferente.
+  function _makeDungeonMusicSystem(file) {
+    let buf = null, rawBuf = null, src = null, gainNode = null;
+    let loaded = false, playing = false, pending = false;
+    let offset = 0, startedAt = 0;
+
+    function _load() {
+      if (loaded) return;
+      loaded = true;
+      fetch(file)
+        .then(r => r.arrayBuffer())
+        .then(ab => {
+          rawBuf = ab;
+          if (ctx) ctx.decodeAudioData(ab.slice(0), d => { buf = d; if (pending) { pending = false; play(); } });
+        })
+        .catch(() => {});
+    }
+
+    function _decodeWhenReady() {
+      if (!rawBuf || buf) return;
+      ctx.decodeAudioData(rawBuf.slice(0), d => { buf = d; if (pending) { pending = false; play(); } });
+    }
+
+    function play(fromOffset) {
+      if (!buf) { pending = true; return; }
+      if (!ctx || playing) return;
+      if (!gainNode) {
+        gainNode = ctx.createGain();
+        gainNode.gain.value = 0;
+        gainNode.connect(masterGain);
+      }
+      src = ctx.createBufferSource();
+      src.buffer = buf;
+      src.loop = true;
+      src.connect(gainNode);
+      const startOff = (fromOffset !== undefined ? fromOffset : offset) % buf.duration;
+      src.start(0, startOff);
+      startedAt = ctx.currentTime - startOff;
+      playing = true;
+      const t = ctx.currentTime;
+      gainNode.gain.cancelScheduledValues(t);
+      gainNode.gain.setValueAtTime(0, t);
+      gainNode.gain.linearRampToValueAtTime(muted ? 0 : 0.55, t + 1.5);
+    }
+
+    function stop(saveOff) {
+      pending = false;
+      if (src) {
+        if (saveOff && playing && buf) offset = (ctx.currentTime - startedAt) % buf.duration;
+        else if (!saveOff) offset = 0;
+        if (gainNode) {
+          const t = ctx ? ctx.currentTime : 0;
+          gainNode.gain.cancelScheduledValues(t);
+          gainNode.gain.setValueAtTime(0, t);
+        }
+        try { src.disconnect(); } catch(e) {}
+        try { src.stop(); } catch(e) {}
+        src = null;
+      }
+      playing = false;
+    }
+
+    function pause() {
+      if (!gainNode || !playing) return;
+      const t = ctx.currentTime;
+      gainNode.gain.cancelScheduledValues(t);
+      gainNode.gain.setValueAtTime(gainNode.gain.value, t);
+      gainNode.gain.linearRampToValueAtTime(0.25, t + 0.4);
+    }
+
+    function resume() {
+      if (!gainNode || !playing) return;
+      const t = ctx.currentTime;
+      gainNode.gain.cancelScheduledValues(t);
+      gainNode.gain.setValueAtTime(gainNode.gain.value, t);
+      gainNode.gain.linearRampToValueAtTime(muted ? 0 : 0.55, t + 0.3);
+    }
+
+    function isPlaying() { return playing; }
+
+    _load();
+    return { play, stop, pause, resume, isPlaying, _decodeWhenReady };
+  }
+
+  const _greenMusic = _makeDungeonMusicSystem('./assets/audio/green_dungeon_music.ogg');
+  const _redMusic   = _makeDungeonMusicSystem('./assets/audio/red_dungeon_music.ogg');
+  const _blackMusic = _makeDungeonMusicSystem('./assets/audio/black_dungeon_music.ogg');
+
+  // Qual sistema de música está tocando agora (blue = o principal _musicSource)
+  let _currentTheme = 'blue';
+
+  function _getThemeSystem(theme) {
+    if (theme === 'green') return _greenMusic;
+    if (theme === 'red')   return _redMusic;
+    if (theme === 'black') return _blackMusic;
+    return null; // blue usa o sistema principal
+  }
+
+  // Para todos os sistemas de dungeon (exceto jackpot/lobby/shop)
+  function _stopAllDungeonMusic(saveOff) {
+    stopMusic(saveOff);
+    _greenMusic.stop(saveOff);
+    _redMusic.stop(saveOff);
+    _blackMusic.stop(saveOff);
+  }
+
+  // Toca a música do tema correto, parando as outras
+  function playDungeonMusic(theme) {
+    theme = theme || 'blue';
+    _currentTheme = theme;
+    const sys = _getThemeSystem(theme);
+    if (sys) {
+      // Para o sistema principal (blue) e os outros temas
+      stopMusic(false);
+      _greenMusic.stop(theme !== 'green');
+      _redMusic.stop(theme !== 'red');
+      _blackMusic.stop(theme !== 'black');
+      sys.play();
+    } else {
+      // blue: usa sistema principal
+      _greenMusic.stop(false);
+      _redMusic.stop(false);
+      _blackMusic.stop(false);
+      playMusic(0);
+    }
+  }
+
+  function pauseDungeonMusic() {
+    const sys = _getThemeSystem(_currentTheme);
+    if (sys) sys.pause(); else pauseMusic();
+  }
+
+  function resumeDungeonMusic() {
+    const sys = _getThemeSystem(_currentTheme);
+    if (sys) sys.resume(); else resumeMusic();
+  }
+
+  function stopDungeonMusic(saveOff) {
+    const sys = _getThemeSystem(_currentTheme);
+    if (sys) sys.stop(saveOff); else stopMusic(saveOff);
+  }
+
+  // ── MÚSICA DE BUFF / SELECT ───────────────────────────────────
+  const _buffMusic = _makeDungeonMusicSystem('./assets/audio/buff_music.ogg');
+
+  function playBuffMusic() { _buffMusic.play(0); }
+  function stopBuffMusic()  { _buffMusic.stop(false); }
   // ─────────────────────────────────────────────────────────────
 
   // ── MÚSICA DE LOBBY ──────────────────────────────────────────
@@ -218,6 +452,8 @@ const Audio = (() => {
   let _lobbyPlaying = false;
   let _lobbyPlayPending = false;
   let _lobbyKilled = false;
+  let _lobbyOffset = 0;
+  let _lobbyStartedAt = 0;
 
   function _loadLobbyMusic() {
     if (_lobbyLoaded) return;
@@ -259,7 +495,9 @@ const Audio = (() => {
     _lobbySource.buffer = _lobbyBuffer;
     _lobbySource.loop = true;
     _lobbySource.connect(_lobbyGain);
-    _lobbySource.start(0);
+    const startOffset = _lobbyOffset % _lobbyBuffer.duration;
+    _lobbySource.start(0, startOffset);
+    _lobbyStartedAt = ctx.currentTime - startOffset;
     _lobbyPlaying = true;
     const t = ctx.currentTime;
     _lobbyGain.gain.cancelScheduledValues(t);
@@ -270,12 +508,15 @@ const Audio = (() => {
   function stopLobbyMusic() {
     _lobbyPlayPending = false;
     _lobbyKilled = true;
-    if (_lobbyGain) {
-      const t = ctx ? ctx.currentTime : 0;
-      _lobbyGain.gain.cancelScheduledValues(t);
-      _lobbyGain.gain.setValueAtTime(0, t);
-    }
     if (_lobbySource) {
+      if (_lobbyPlaying && _lobbyBuffer) {
+        _lobbyOffset = (ctx.currentTime - _lobbyStartedAt) % _lobbyBuffer.duration;
+      }
+      if (_lobbyGain) {
+        const t = ctx ? ctx.currentTime : 0;
+        _lobbyGain.gain.cancelScheduledValues(t);
+        _lobbyGain.gain.setValueAtTime(0, t);
+      }
       try { _lobbySource.disconnect(); } catch(e) {}
       try { _lobbySource.stop(); } catch(e) {}
       _lobbySource = null;
@@ -294,14 +535,20 @@ const Audio = (() => {
     _decodeJackpotWhenReady();
     _decodeSniperSounds();
     _decodeLobbyWhenReady();
+    _decodeShopWhenReady();
     _decodeMenuSounds();
     _decodeTrickySounds();
+    _greenMusic._decodeWhenReady();
+    _redMusic._decodeWhenReady();
+    _blackMusic._decodeWhenReady();
+    _buffMusic._decodeWhenReady();
   }
 
   // Inicia ambos os fetches imediatamente
   _loadMusic();
   _loadJackpot();
   _loadLobbyMusic();
+  _loadShopMusic();
 
   // ── TRICKY / GLITCH FURY SOUNDS ──────────────────────────────
   let _trickyMusicRaw = null, _trickyMusicBuffer = null;
@@ -786,8 +1033,11 @@ const Audio = (() => {
     init, resume,
     coinReal, toggleMute, isMuted,
     playMusic, stopMusic, pauseMusic, resumeMusic,
+    playDungeonMusic, stopDungeonMusic, pauseDungeonMusic, resumeDungeonMusic,
+    playBuffMusic, stopBuffMusic,
     playJackpotMusic,
     playLobbyMusic, stopLobbyMusic,
+    playShopMusic, stopShopMusic,
     playTrickyMusic, stopTrickyMusic, fadeTrickyMusicOut,
     pauseTrickyMusic, resumeTrickyMusic,
   };
