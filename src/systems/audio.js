@@ -167,8 +167,11 @@ const Audio = (() => {
   function playJackpotMusic() {
     if (!ctx || !_jackpotBuffer) return;
 
-    // Para a música tema salvando a posição
+    // Para TODAS as músicas de dungeon salvando posição (blue + green/red/black)
     stopMusic(true);
+    _greenMusic.stop(true);
+    _redMusic.stop(true);
+    _blackMusic.stop(true);
 
     // Cria nó de gain para o jackpot
     if (!_jackpotGain) {
@@ -199,13 +202,11 @@ const Audio = (() => {
       _jackpotGain.gain.linearRampToValueAtTime(0, t + 5); // fade de 5s (10s→15s)
     }, 10000);
 
-    // Quando a música acabar (~15s), volta a música tema de onde parou
+    // Quando a música acabar (~15s), volta a música do tema de onde parou
     _jackpotSource.onended = () => {
       _jackpotSource = null;
       if (_jackpotFadeTimer) { clearTimeout(_jackpotFadeTimer); _jackpotFadeTimer = null; }
-      // Volta música tema do ponto salvo (usa playDungeonMusic se já definido)
-      if (typeof playDungeonMusic === 'function') playDungeonMusic(_currentTheme);
-      else playMusic(_musicOffset);
+      playDungeonMusic(_currentTheme);
     };
   }
   // ─────────────────────────────────────────────────────────────
@@ -295,7 +296,8 @@ const Audio = (() => {
   // ── MÚSICAS DE DUNGEON POR TEMA ───────────────────────────────
   // Fábrica para criar um sistema de música idêntico ao principal,
   // mas apontando para um arquivo diferente.
-  function _makeDungeonMusicSystem(file) {
+  function _makeDungeonMusicSystem(file, vol) {
+    const TARGET_VOL = vol !== undefined ? vol : 0.55;
     let buf = null, rawBuf = null, src = null, gainNode = null;
     let loaded = false, playing = false, pending = false;
     let offset = 0, startedAt = 0;
@@ -336,7 +338,7 @@ const Audio = (() => {
       const t = ctx.currentTime;
       gainNode.gain.cancelScheduledValues(t);
       gainNode.gain.setValueAtTime(0, t);
-      gainNode.gain.linearRampToValueAtTime(muted ? 0 : 0.55, t + 1.5);
+      gainNode.gain.linearRampToValueAtTime(muted ? 0 : TARGET_VOL, t + 1.5);
     }
 
     function stop(saveOff) {
@@ -369,7 +371,7 @@ const Audio = (() => {
       const t = ctx.currentTime;
       gainNode.gain.cancelScheduledValues(t);
       gainNode.gain.setValueAtTime(gainNode.gain.value, t);
-      gainNode.gain.linearRampToValueAtTime(muted ? 0 : 0.55, t + 0.3);
+      gainNode.gain.linearRampToValueAtTime(muted ? 0 : TARGET_VOL, t + 0.3);
     }
 
     function isPlaying() { return playing; }
@@ -378,9 +380,9 @@ const Audio = (() => {
     return { play, stop, pause, resume, isPlaying, _decodeWhenReady };
   }
 
-  const _greenMusic = _makeDungeonMusicSystem('./assets/audio/green_dungeon_music.ogg');
-  const _redMusic   = _makeDungeonMusicSystem('./assets/audio/red_dungeon_music.ogg');
-  const _blackMusic = _makeDungeonMusicSystem('./assets/audio/black_dungeon_music.ogg');
+  const _greenMusic = _makeDungeonMusicSystem('./assets/audio/green_dungeon_music.ogg', 0.75);
+  const _redMusic   = _makeDungeonMusicSystem('./assets/audio/red_dungeon_music.ogg',   0.75);
+  const _blackMusic = _makeDungeonMusicSystem('./assets/audio/black_dungeon_music.ogg', 0.75);
 
   // Qual sistema de música está tocando agora (blue = o principal _musicSource)
   let _currentTheme = 'blue';
@@ -401,23 +403,24 @@ const Audio = (() => {
   }
 
   // Toca a música do tema correto, parando as outras
+  // Sempre salva o offset de quem estava tocando para retomar depois
   function playDungeonMusic(theme) {
     theme = theme || 'blue';
     _currentTheme = theme;
     const sys = _getThemeSystem(theme);
     if (sys) {
-      // Para o sistema principal (blue) e os outros temas
-      stopMusic(false);
-      _greenMusic.stop(theme !== 'green');
-      _redMusic.stop(theme !== 'red');
-      _blackMusic.stop(theme !== 'black');
-      sys.play();
+      // Para o sistema principal (blue) e os outros temas — sempre salva offset
+      stopMusic(true);
+      _greenMusic.stop(true);
+      _redMusic.stop(true);
+      _blackMusic.stop(true);
+      sys.play(); // retoma do offset interno salvo
     } else {
-      // blue: usa sistema principal
-      _greenMusic.stop(false);
-      _redMusic.stop(false);
-      _blackMusic.stop(false);
-      playMusic(0);
+      // blue: usa sistema principal — para as outras salvando offset, retoma blue do offset salvo
+      _greenMusic.stop(true);
+      _redMusic.stop(true);
+      _blackMusic.stop(true);
+      playMusic(_musicOffset); // retoma de onde parou
     }
   }
 
@@ -432,8 +435,11 @@ const Audio = (() => {
   }
 
   function stopDungeonMusic(saveOff) {
-    const sys = _getThemeSystem(_currentTheme);
-    if (sys) sys.stop(saveOff); else stopMusic(saveOff);
+    // Para todas as músicas de dungeon, sempre salvando o offset de quem estiver tocando
+    stopMusic(saveOff);
+    _greenMusic.stop(saveOff);
+    _redMusic.stop(saveOff);
+    _blackMusic.stop(saveOff);
   }
 
   // ── MÚSICA DE BUFF / SELECT ───────────────────────────────────
@@ -697,7 +703,15 @@ const Audio = (() => {
     src.connect(g); g.connect(masterGain);
     src.start(ctx.currentTime);
   }
-  function sniperShot()   { _playBuffer(_balaBuffer); }
+  function sniperShot() {
+    if(!ctx || !_balaBuffer || muted) return;
+    const src = ctx.createBufferSource();
+    src.buffer = _balaBuffer;
+    const g = ctx.createGain();
+    g.gain.value = 0.35;
+    src.connect(g); g.connect(masterGain);
+    src.start(ctx.currentTime);
+  }
 
   function menuHover() { _playBuffer(_selecaoBuffer); }
   function menuClick() { _playBuffer(_selecaoClickBuffer); }

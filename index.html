@@ -14,81 +14,194 @@
 <canvas id="c"></canvas>
 
 <div id="main-menu">
+  <canvas id="menu-bg-canvas"></canvas>
+
   <div class="menu-gold-display" id="menu-gold-disp">🪙 0</div>
-  <div id="menu-title">⚔ DUNGEON KNIGHT</div>
-  <div id="menu-subtitle">CARD EDITION</div>
-  <button class="menu-btn" onclick="startGame()">▶ JOGAR</button>
-  <div id="deck-warning-msg" style="color:#ff4444;font-size:12px;font-family:'Courier New',monospace;text-align:center;margin-top:-8px;margin-bottom:4px;opacity:0;transition:opacity 0.4s;letter-spacing:1px;"></div>
-  <button class="menu-btn" onclick="openDeckScreen()">🂠 VER BARALHO</button>
-  <button class="menu-btn" onclick="openShopScreen()">🪙 LOJA</button>
-  <button class="menu-btn" onclick="openArtifactScreen()">🧿 ARTEFATOS</button>
-  <button class="menu-btn" onclick="openOptionsScreen()">⚙ OPÇÕES</button>
+
+  <div class="menu-inner">
+    <!-- Coluna esquerda: decoração -->
+    <div class="menu-deco">
+      <div class="menu-deco-line"></div>
+      <div class="menu-deco-runes">
+        <span>⚔</span><span>🂠</span><span>💀</span><span>🧿</span><span>⚡</span>
+      </div>
+      <div class="menu-deco-line"></div>
+    </div>
+
+    <!-- Centro: título + botões -->
+    <div class="menu-center">
+      <div class="menu-title-wrap">
+        <div class="menu-eyebrow">— CARD DUNGEON RPG —</div>
+        <div id="menu-title">
+          <span class="title-bucket" data-text="BUCKET">BUCKET</span>
+          <span class="title-knight" data-text="KNIGHT">KNIGHT</span>
+        </div>
+        <div class="menu-title-underline"></div>
+      </div>
+
+      <div class="menu-buttons">
+        <button class="menu-btn menu-btn-play" onclick="startGame()">
+          <span class="btn-icon">▶</span><span class="btn-label">JOGAR</span>
+        </button>
+        <div id="deck-warning-msg"></div>
+        <button class="menu-btn" onclick="openDeckScreen()">
+          <span class="btn-icon">🂠</span><span class="btn-label">BARALHO</span>
+        </button>
+        <button class="menu-btn" onclick="openShopScreen()">
+          <span class="btn-icon">🪙</span><span class="btn-label">LOJA</span>
+        </button>
+        <button class="menu-btn" onclick="openArtifactScreen()">
+          <span class="btn-icon">🧿</span><span class="btn-label">ARTEFATOS</span>
+        </button>
+        <button class="menu-btn" onclick="openOptionsScreen()">
+          <span class="btn-icon">⚙</span><span class="btn-label">OPÇÕES</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Coluna direita: espelho -->
+    <div class="menu-deco menu-deco-right">
+      <div class="menu-deco-line"></div>
+      <div class="menu-deco-runes">
+        <span>🗡️</span><span>💎</span><span>🔮</span><span>🩸</span><span>👑</span>
+      </div>
+      <div class="menu-deco-line"></div>
+    </div>
+  </div>
+
+  <div class="menu-footer">PRESSIONE QUALQUER TECLA PARA COMEÇAR</div>
 </div>
 
 <!-- TELA DE BARALHO -->
 <div id="deck-screen">
-  <h2>🂠 BARALHO</h2>
-  <div class="sub">Arraste cartas e artefatos para equipar nos slots</div>
-  <button class="player-buff-btn" onclick="openPlayerBuffScreen()">❤️ BUFFS DO PLAYER</button>
-
-  <!-- Linha superior: Deck de cartas | Slots de artefatos -->
-  <div class="deck-top-row">
-    <div class="deck-top-col">
-      <div class="deck-section-title">🂠 DECK (5 CARTAS)</div>
-      <div class="deck-slots" id="deck-slot-area"></div>
-      <div class="deck-section-title" style="margin-top:10px">ESPECIAL</div>
-      <div id="deck-special-area" style="display:flex;flex-direction:column;align-items:center;gap:6px"></div>
+  <!-- Header fixo -->
+  <div class="ds-header">
+    <div class="ds-header-left">
+      <span class="ds-title-icon">🂠</span>
+      <div>
+        <div class="ds-title">BARALHO</div>
+        <div class="ds-subtitle">Arraste cartas para equipar nos slots</div>
+      </div>
     </div>
-    <div class="deck-top-col">
-      <div class="deck-section-title">🧿 ARTEFATOS (5 SLOTS)</div>
+    <div class="ds-header-right">
+      <button class="ds-buff-btn" onclick="openPlayerBuffScreen()">❤️ BUFFS DO PLAYER</button>
+      <button class="back-btn ds-back" onclick="closeDeckScreen()">← VOLTAR</button>
+    </div>
+  </div>
+
+  <!-- Corpo com 3 colunas fixas -->
+  <div class="ds-body">
+
+    <!-- COLUNA ESQUERDA: Cartas equipadas -->
+    <div class="ds-col ds-col-equipped">
+      <div class="ds-col-header">
+        <span class="ds-col-icon">🂠</span>
+        <span class="ds-col-title">DECK ATIVO</span>
+        <span class="ds-col-sub">5 cartas</span>
+      </div>
+      <div class="deck-slots" id="deck-slot-area"></div>
+
+      <div class="ds-divider"></div>
+
+      <div class="ds-col-header" style="margin-top:4px">
+        <span class="ds-col-icon">✦</span>
+        <span class="ds-col-title">ESPECIAL</span>
+        <span class="ds-col-sub">1 slot</span>
+      </div>
+      <div id="deck-special-area"></div>
+
+      <div class="ds-divider"></div>
+
+      <div class="ds-col-header" style="margin-top:4px">
+        <span class="ds-col-icon">🧿</span>
+        <span class="ds-col-title">ARTEFATOS</span>
+        <span class="ds-col-sub">5 slots</span>
+      </div>
       <div id="deck-artifact-slots" class="deck-artifact-slots-equip"></div>
     </div>
-  </div>
 
-  <!-- Linha inferior: Coleção de cartas | Coleção de artefatos -->
-  <div class="deck-bottom-row">
-    <div class="deck-bottom-col">
-      <div class="deck-section-title">COLEÇÃO DE CARTAS</div>
+    <!-- COLUNA CENTRO: Coleção de cartas -->
+    <div class="ds-col ds-col-cards">
+      <div class="ds-col-header">
+        <span class="ds-col-icon">📚</span>
+        <span class="ds-col-title">COLEÇÃO DE CARTAS</span>
+      </div>
       <div class="collection-grid" id="collection-area"></div>
     </div>
-    <div class="deck-bottom-col">
-      <div class="deck-section-title">🎒 COLEÇÃO DE ARTEFATOS</div>
+
+    <!-- COLUNA DIREITA: Coleção de artefatos -->
+    <div class="ds-col ds-col-artifacts">
+      <div class="ds-col-header">
+        <span class="ds-col-icon">🎒</span>
+        <span class="ds-col-title">ARTEFATOS</span>
+      </div>
       <div id="deck-artifact-collection" class="deck-artifact-coll-grid"></div>
     </div>
-  </div>
 
-  <button class="back-btn" onclick="closeDeckScreen()">← VOLTAR</button>
+  </div>
 </div>
 
 <!-- TELA DE ARTEFATOS -->
 <div id="artifact-screen">
-  <h2>🧿 ARTEFATOS</h2>
-  <div class="sub">Abra baús para obter artefatos — equipe-os na tela de Baralho</div>
-  <div id="artifact-shop-gold">🪙 0</div>
 
-  <div style="display:flex;gap:28px;flex-wrap:wrap;justify-content:center;margin-top:12px">
-    <!-- Baús -->
-    <div>
-      <div class="deck-section-title">🗃 COMPRAR BAÚS</div>
-      <div style="display:flex;flex-direction:column;gap:10px;margin-top:8px">
-        <div class="chest-card" onclick="buyChest()">
-          <div style="font-size:34px">📦</div>
-          <div style="font-size:11px;font-weight:bold;color:#ffdd88;margin-top:4px">BAUZINHO</div>
-          <div style="font-size:10px;color:#aaa;margin-top:2px">Artefato aleatório</div>
-          <div style="font-size:11px;color:#ffd700;margin-top:6px;font-weight:bold">🪙 200</div>
-        </div>
+  <!-- Header -->
+  <div class="as-header">
+    <div class="as-header-left">
+      <span class="as-title-icon">🧿</span>
+      <div>
+        <div class="as-title">ARTEFATOS</div>
+        <div class="as-subtitle">Abra baús · colecione · equipe no Baralho</div>
       </div>
-      <div id="chest-result-msg" style="margin-top:10px;min-height:28px;font-size:11px;text-align:center;color:#aaddaa"></div>
     </div>
-
-    <!-- Álbum completo de Artefatos -->
-    <div>
-      <div class="deck-section-title">📖 ÁLBUM DE ARTEFATOS</div>
-      <div id="artifact-collection-grid" style="display:flex;flex-wrap:wrap;gap:8px;max-width:520px;margin-top:8px;justify-content:flex-start"></div>
+    <div class="as-header-right">
+      <div id="artifact-shop-gold" class="as-gold">🪙 0</div>
+      <button class="back-btn as-back" onclick="closeArtifactScreen()">← VOLTAR</button>
     </div>
   </div>
 
-  <button class="back-btn" onclick="closeArtifactScreen()">← VOLTAR</button>
+  <!-- Body 2 colunas -->
+  <div class="as-body">
+
+    <!-- COLUNA ESQUERDA: loja de baús -->
+    <div class="as-col-shop">
+
+      <div class="as-section-title">🗃 COMPRAR BAÚS</div>
+
+      <div class="chest-card" onclick="buyChest()">
+        <div class="chest-card-emoji">📦</div>
+        <div class="chest-card-name">BAUZINHO</div>
+        <div class="chest-card-tagline">Artefato aleatório de qualquer raridade</div>
+        <div class="chest-card-price">🪙 200</div>
+      </div>
+
+      <div id="chest-result-msg" class="as-chest-result"></div>
+
+      <!-- Estatísticas de coleção -->
+      <div class="as-section-title" style="margin-top:28px">📊 COLEÇÃO</div>
+      <div id="as-collection-stats" class="as-stats-grid"></div>
+
+    </div>
+
+    <!-- COLUNA DIREITA: álbum -->
+    <div class="as-col-album">
+      <div class="as-album-header">
+        <div class="as-section-title" style="margin-bottom:0">📖 ÁLBUM DE ARTEFATOS</div>
+        <div id="as-album-count" class="as-album-count"></div>
+      </div>
+
+      <!-- Filtros de raridade -->
+      <div class="as-filters" id="as-filters">
+        <button class="as-filter-btn active" data-rarity="all">TODOS</button>
+        <button class="as-filter-btn" data-rarity="comum">COMUM</button>
+        <button class="as-filter-btn" data-rarity="raro">RARO</button>
+        <button class="as-filter-btn" data-rarity="epico">ÉPICO</button>
+        <button class="as-filter-btn" data-rarity="lendario">LENDÁRIO</button>
+      </div>
+
+      <div id="artifact-collection-grid" class="as-album-grid"></div>
+    </div>
+
+  </div>
 </div>
 
 <!-- MODAL DE ABERTURA DE BAÚ -->
@@ -443,6 +556,133 @@
     window['_glitchImg_' + key] = new Image();
     window['_glitchImg_' + key].src = './assets/' + key + '.png';
   });
+
+  // ── Menu background canvas animation ──────────────────────────
+  (function() {
+    const mc = document.getElementById('menu-bg-canvas');
+    if (!mc) return;
+    const mctx = mc.getContext('2d');
+    let W, H;
+
+    function resize() {
+      W = mc.width  = mc.offsetWidth;
+      H = mc.height = mc.offsetHeight;
+    }
+    resize();
+    window.addEventListener('resize', resize);
+
+    // Partículas
+    const PARTICLE_COUNT = 55;
+    const particles = Array.from({length: PARTICLE_COUNT}, () => ({
+      x: Math.random() * 1920,
+      y: Math.random() * 1080,
+      r: 0.8 + Math.random() * 2.2,
+      vx: (Math.random() - 0.5) * 0.18,
+      vy: -0.08 - Math.random() * 0.18,
+      alpha: 0.15 + Math.random() * 0.55,
+      hue: 220 + Math.floor(Math.random() * 80), // azul-roxo
+      life: Math.random(),
+    }));
+
+    // Linhas conectoras
+    const CONN_DIST = 120;
+
+    let t = 0;
+    function frame() {
+      if (!document.getElementById('main-menu') ||
+          document.getElementById('main-menu').style.display === 'none') {
+        requestAnimationFrame(frame); return;
+      }
+      mctx.clearRect(0, 0, W, H);
+
+      // Fundo com gradiente radial sutil
+      const bg = mctx.createRadialGradient(W*0.5, H*0.45, 0, W*0.5, H*0.5, H*0.72);
+      bg.addColorStop(0, 'rgba(14,10,36,1)');
+      bg.addColorStop(1, 'rgba(4,4,14,1)');
+      mctx.fillStyle = bg;
+      mctx.fillRect(0, 0, W, H);
+
+      // Grid de linhas finas
+      mctx.save();
+      mctx.strokeStyle = 'rgba(40,40,100,0.18)';
+      mctx.lineWidth = 1;
+      const GRID = 60;
+      for (let x = 0; x < W; x += GRID) {
+        mctx.beginPath(); mctx.moveTo(x, 0); mctx.lineTo(x, H); mctx.stroke();
+      }
+      for (let y = 0; y < H; y += GRID) {
+        mctx.beginPath(); mctx.moveTo(0, y); mctx.lineTo(W, y); mctx.stroke();
+      }
+      mctx.restore();
+
+      // Vinheta bordas
+      const vgrd = mctx.createRadialGradient(W/2, H/2, H*0.28, W/2, H/2, H*0.75);
+      vgrd.addColorStop(0, 'rgba(0,0,0,0)');
+      vgrd.addColorStop(1, 'rgba(0,0,0,0.62)');
+      mctx.fillStyle = vgrd;
+      mctx.fillRect(0, 0, W, H);
+
+      t += 0.016;
+
+      // Atualiza e desenha partículas
+      particles.forEach((p, i) => {
+        p.x += p.vx;
+        p.y += p.vy;
+        p.life += 0.004;
+        if (p.y < -10 || p.life > 1) {
+          p.x = Math.random() * W;
+          p.y = H + 10;
+          p.life = 0;
+          p.alpha = 0.15 + Math.random() * 0.55;
+          p.r = 0.8 + Math.random() * 2.2;
+          p.hue = 220 + Math.floor(Math.random() * 80);
+        }
+        const fade = Math.sin(p.life * Math.PI);
+        mctx.save();
+        mctx.globalAlpha = p.alpha * fade;
+        mctx.shadowColor = `hsl(${p.hue},80%,70%)`;
+        mctx.shadowBlur = p.r * 5;
+        mctx.fillStyle = `hsl(${p.hue},70%,75%)`;
+        mctx.beginPath();
+        mctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+        mctx.fill();
+        mctx.restore();
+
+        // Linhas conectoras entre partículas próximas
+        for (let j = i + 1; j < particles.length; j++) {
+          const q = particles[j];
+          const dx = p.x - q.x, dy = p.y - q.y;
+          const d = Math.sqrt(dx*dx + dy*dy);
+          if (d < CONN_DIST) {
+            const lAlpha = (1 - d / CONN_DIST) * 0.12 * fade;
+            mctx.save();
+            mctx.globalAlpha = lAlpha;
+            mctx.strokeStyle = `hsl(${(p.hue+q.hue)/2},60%,65%)`;
+            mctx.lineWidth = 0.8;
+            mctx.beginPath();
+            mctx.moveTo(p.x, p.y);
+            mctx.lineTo(q.x, q.y);
+            mctx.stroke();
+            mctx.restore();
+          }
+        }
+      });
+
+      // Ondas de luz horizontais suaves
+      for (let w = 0; w < 3; w++) {
+        const wy = H * (0.25 + w * 0.22) + Math.sin(t * 0.4 + w * 2.1) * 18;
+        const wgrd = mctx.createLinearGradient(0, wy - 30, 0, wy + 30);
+        wgrd.addColorStop(0, 'rgba(80,60,180,0)');
+        wgrd.addColorStop(0.5, `rgba(80,60,180,${0.03 + w * 0.012})`);
+        wgrd.addColorStop(1, 'rgba(80,60,180,0)');
+        mctx.fillStyle = wgrd;
+        mctx.fillRect(0, wy - 30, W, 60);
+      }
+
+      requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+  })();
 </script>
 </body>
 </html>
