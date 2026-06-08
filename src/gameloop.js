@@ -3381,8 +3381,8 @@ function useGlitchFuryCard(){
   glitchFuryCharge = 0;
   glitchFuryUsedDungeon = DUNGEON_DEFS[currentDungeon].num;
 
-  // Para música e começa fade para preto
-  if(typeof Audio !== 'undefined' && Audio.stopDungeonMusic) Audio.stopDungeonMusic(false);
+  // Para música salvando offset para retomar depois
+  if(typeof Audio !== 'undefined' && Audio.stopDungeonMusic) Audio.stopDungeonMusic(true);
 
   glitchFuryDarkening = true;
   glitchFuryDarkenTimer = 0;
@@ -3407,7 +3407,7 @@ function useGlitchFuryCard(){
 function startGlitchFuryEffect(){
   glitchFuryAwaitClick = false;
   if(typeof Audio !== 'undefined' && Audio.playTrickyMusic) Audio.playTrickyMusic();
-  if(typeof Audio !== 'undefined' && Audio.stopDungeonMusic) Audio.stopDungeonMusic(false);
+  if(typeof Audio !== 'undefined' && Audio.stopDungeonMusic) Audio.stopDungeonMusic(true);
   glitchFuryScreamTimer = 9000;
   glitchFuryDarkenAlpha = 1;
   glitchFuryDarkening = false;

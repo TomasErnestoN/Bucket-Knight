@@ -396,11 +396,11 @@ function renderDeckScreen() {
       const def = CARD_DEFS_STATIC[id];
       const rarDef = RARITIES_STATIC[def.rarity];
       div.innerHTML = `
-        <div style="font-size:28px;margin-bottom:4px">${def.icon}</div>
-        <div style="font-size:8px;text-align:center;color:#e0e0ff">${def.name}</div>
-        <div style="font-size:9px;color:#88aaff;margin-top:2px">💧 ${def.mana}</div>
-        <div style="font-size:7px;margin-top:2px" class="rarity-label-${def.rarity}">${rarDef.label}</div>
-        <div style="font-size:7px;color:#555577;margin-top:3px">arraste ▸ coleção</div>`;
+        <div class="ds-card-icon">${def.icon}</div>
+        <div class="ds-card-name">${def.name}</div>
+        <div class="ds-card-mana">💧 ${def.mana}</div>
+        <div class="ds-card-rarity rarity-label-${def.rarity}">${rarDef.label}</div>
+        <div class="ds-card-hint">clique / arraste</div>`;
       div.style.cursor = 'pointer';
       div.onclick = () => openCardModal(id, 'slot', i);
       div.draggable = true;
@@ -412,7 +412,7 @@ function renderDeckScreen() {
         div.classList.remove('dragging'); _dragId = null; _dragFromSlot = null;
       });
     } else {
-      div.innerHTML = `<div style="font-size:28px">+</div><div style="font-size:8px;margin-top:4px;color:#2a2a55">vazio</div>`;
+      div.innerHTML = `<div class="ds-slot-empty-icon">+</div><div class="ds-slot-empty-label">vazio</div>`;
     }
 
     div.addEventListener('dragover', (e) => { e.preventDefault(); div.classList.add('drag-over'); });
@@ -439,10 +439,10 @@ function renderDeckScreen() {
       const def = CARD_DEFS_STATIC[equippedSpecial];
       slotDiv.className = 'deck-slot filled rarity-especial';
       slotDiv.innerHTML = `
-        <div style="font-size:28px;margin-bottom:4px">${def.icon}</div>
-        <div style="font-size:8px;text-align:center;color:#ff88cc;font-weight:bold">${def.name}</div>
-        <div style="font-size:7px;margin-top:2px;color:#ff2288">ESPECIAL</div>
-        <div style="font-size:7px;color:#555577;margin-top:3px">arraste ▸ coleção</div>`;
+        <div class="ds-card-icon">${def.icon}</div>
+        <div class="ds-card-name" style="color:#ff88cc">${def.name}</div>
+        <div class="ds-card-rarity" style="color:#ff2288;font-size:7px;margin-top:2px">ESPECIAL</div>
+        <div class="ds-card-hint">clique / arraste</div>`;
       slotDiv.style.cursor = 'pointer';
       slotDiv.onclick = () => openCardModal(equippedSpecial, 'special');
       slotDiv.draggable = true;
@@ -455,7 +455,7 @@ function renderDeckScreen() {
       });
     } else {
       slotDiv.className = 'deck-slot empty-slot';
-      slotDiv.innerHTML = `<div style="font-size:20px">✦</div><div style="font-size:8px;margin-top:4px;color:#661144">especial</div>`;
+      slotDiv.innerHTML = `<div class="ds-slot-empty-icon" style="font-size:22px;color:#441133">✦</div><div class="ds-slot-empty-label" style="color:#441133">especial</div>`;
     }
     slotDiv.addEventListener('dragover', (e) => { e.preventDefault(); slotDiv.classList.add('drag-over'); });
     slotDiv.addEventListener('dragleave', () => slotDiv.classList.remove('drag-over'));
@@ -502,13 +502,13 @@ function renderDeckScreen() {
     const div = document.createElement('div');
     div.className = `coll-card rarity-${def.rarity}${alreadyMaxed?' in-deck':''}`;
     div.innerHTML = `
-      <div style="font-size:28px;margin-bottom:4px">${def.icon}</div>
-      <div style="font-size:8px;text-align:center;color:${isSpecial?'#ff88cc':'#e0e0ff'}">${def.name}</div>
-      <div style="font-size:9px;color:#88aaff;margin-top:2px">${isSpecial?'ESPECIAL':'💧 '+def.mana}</div>
-      <div style="font-size:7px;margin-top:2px" class="rarity-label-${def.rarity}">${rarDef.label}</div>
-      ${canDrag
-        ? `<div style="font-size:8px;color:#557755;margin-top:4px">arraste ▸ ${isSpecial?'slot especial':'slot'}</div>`
-        : '<div style="font-size:7px;color:#444466;margin-top:5px">equipada</div>'}`;
+      <div class="ds-card-icon">${def.icon}</div>
+      <div class="ds-card-name" style="${isSpecial?'color:#ff88cc':''}">${def.name}</div>
+      <div class="ds-card-mana">${isSpecial?'<span style="color:#ff2288;font-size:7px">ESPECIAL</span>':'💧 '+def.mana}</div>
+      <div class="ds-card-rarity rarity-label-${def.rarity}">${rarDef.label}</div>
+      ${alreadyMaxed
+        ? '<div class="ds-card-hint" style="color:#334433">equipada</div>'
+        : `<div class="ds-card-hint" style="color:#3a5a3a">arraste ▸ slot</div>`}`;
     if(canDrag){
       div.draggable = true;
       div.addEventListener('dragstart', () => {
@@ -1936,13 +1936,52 @@ function closeArtifactModal() {
 function renderArtifactCollectionGrid() {
   const grid = document.getElementById('artifact-collection-grid');
   if(!grid) return;
-  grid.innerHTML = '';
 
-  // Álbum completo: mostra TODOS os artefatos definidos, obtidos ou não
+  // ── Estatísticas por raridade ──
   const counts = {};
   ownedArtifacts.forEach(id => { counts[id] = (counts[id]||0)+1; });
+  const statsEl = document.getElementById('as-collection-stats');
+  if(statsEl) {
+    const rarities = ['comum','raro','epico','lendario'];
+    const rarLabels = { comum:'COMUM', raro:'RARO', epico:'ÉPICO', lendario:'LENDÁRIO' };
+    statsEl.innerHTML = rarities.map(r => {
+      const total = Object.values(ARTIFACT_DEFS).filter(d => d.rarity === r).length;
+      const owned  = Object.keys(counts).filter(id => ARTIFACT_DEFS[id] && ARTIFACT_DEFS[id].rarity === r).length;
+      return `<div class="as-stat-row rarity-${r}">
+        <span class="as-stat-label">${rarLabels[r]}</span>
+        <span class="as-stat-value">${owned} / ${total}</span>
+      </div>`;
+    }).join('');
+  }
+
+  // ── Contador do álbum ──
+  const countEl = document.getElementById('as-album-count');
+  const totalDefs = Object.keys(ARTIFACT_DEFS).length;
+  const totalOwned = Object.keys(counts).length;
+  if(countEl) countEl.textContent = `${totalOwned} / ${totalDefs} obtidos`;
+
+  // ── Filtro ativo ──
+  let activeRarity = 'all';
+  const filterBtns = document.querySelectorAll('.as-filter-btn');
+  filterBtns.forEach(btn => {
+    btn.onclick = () => {
+      filterBtns.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      activeRarity = btn.dataset.rarity;
+      _renderAlbumCards(grid, counts, activeRarity);
+      if(typeof Audio !== 'undefined' && Audio.menuClick) Audio.menuClick();
+    };
+  });
+
+  _renderAlbumCards(grid, counts, activeRarity);
+}
+
+function _renderAlbumCards(grid, counts, filterRarity) {
+  grid.innerHTML = '';
 
   Object.entries(ARTIFACT_DEFS).forEach(([id, def]) => {
+    if(filterRarity !== 'all' && def.rarity !== filterRarity) return;
+
     const owned = counts[id] || 0;
     const isOwned = owned > 0;
     const isEquipped = equippedArtifacts.includes(id);
@@ -1950,46 +1989,45 @@ function renderArtifactCollectionGrid() {
     const level = isOwned && hasUpgrades ? getArtifactLevel(id) : null;
     const dupes = Math.max(0, owned - 1);
 
-    let levelHtml = '';
-    if(isOwned && hasUpgrades) {
-      const stars = '★'.repeat(level) + '☆'.repeat(5 - level);
-      const upgradeLabel = ARTIFACT_UPGRADE_LABELS[id] ? ARTIFACT_UPGRADE_LABELS[id](level) : '';
-      levelHtml = `<div style="font-size:9px;color:#ffcc44;letter-spacing:1px;margin:2px 0">${stars}</div>`;
-      levelHtml += `<div style="font-size:8px;color:#aaddff;margin-bottom:2px">${upgradeLabel}</div>`;
-      if(level < 5) {
-        const spent = getDupesSpentForLevel(level);
-        const dupesInLevel = Math.max(0, dupes - spent);
-        const needed = ARTIFACT_LEVEL_THRESHOLDS[level - 1];
-        const pct = Math.min(100, Math.round(dupesInLevel / needed * 100));
-        levelHtml += `<div style="font-size:7px;color:#778;margin-bottom:2px">Nv${level+1}: ${dupesInLevel}/${needed} dupl.</div>`;
-        levelHtml += `<div style="background:#223;border-radius:3px;height:4px;width:100%;overflow:hidden"><div style="background:#44aaff;height:100%;width:${pct}%"></div></div>`;
-      } else {
-        levelHtml += `<div style="font-size:7px;color:#ffcc44">✦ MÁXIMO ✦</div>`;
-      }
-    }
-
     const div = document.createElement('div');
-    div.className = `artifact-card rarity-${def.rarity}`;
+    div.className = `artifact-card rarity-${def.rarity}${!isOwned ? ' not-owned' : ''}${isEquipped ? ' is-equipped' : ''}`;
+
     if(!isOwned) {
-      // Não obtido: silhueta/bloqueado
-      div.style.filter = 'grayscale(1) brightness(0.35)';
-      div.style.opacity = '0.5';
       div.innerHTML = `
         <div class="art-icon">❓</div>
         <div class="art-name">${def.name}</div>
-        <div class="art-rarity" style="color:${ARTIFACT_RARITY_COLORS[def.rarity]}">${ARTIFACT_RARITY_LABELS[def.rarity]}</div>
-        <div class="art-desc" style="font-size:8px;color:#555566">Não obtido</div>`;
+        <div class="art-rarity" style="color:${ARTIFACT_RARITY_COLORS[def.rarity]}">${ARTIFACT_RARITY_LABELS[def.rarity]}</div>`;
     } else {
-      div.style.opacity = isEquipped ? '0.6' : '1';
+      let starsHtml = '';
+      let barHtml = '';
+      if(hasUpgrades && level !== null) {
+        const stars = '★'.repeat(level) + '☆'.repeat(5 - level);
+        const upgradeLabel = ARTIFACT_UPGRADE_LABELS[id] ? ARTIFACT_UPGRADE_LABELS[id](level) : '';
+        starsHtml = `<div class="art-stars">${stars}</div>
+          <div class="art-effect">${upgradeLabel}</div>`;
+        if(level < 5) {
+          const spent = getDupesSpentForLevel(level);
+          const dupesInLevel = Math.max(0, dupes - spent);
+          const needed = ARTIFACT_LEVEL_THRESHOLDS[level - 1];
+          const pct = Math.min(100, Math.round(dupesInLevel / needed * 100));
+          barHtml = `<div class="art-bar-wrap">
+            <div class="art-bar-bg"><div class="art-bar-fill" style="width:${pct}%"></div></div>
+          </div>`;
+        } else {
+          barHtml = `<div class="art-effect" style="color:#ffcc44;font-size:7px">✦ MÁXIMO ✦</div>`;
+        }
+      }
+      const dupesHtml = dupes > 0 ? `<div class="art-dupes">${dupes}x dupl.</div>` : '';
+
       div.innerHTML = `
         <div class="art-icon">${def.icon}</div>
         <div class="art-name">${def.name}</div>
         <div class="art-rarity" style="color:${ARTIFACT_RARITY_COLORS[def.rarity]}">${ARTIFACT_RARITY_LABELS[def.rarity]}</div>
-        ${levelHtml}
-        <div class="art-desc" style="font-size:8px;color:#889">${def.desc}</div>
-        ${dupes > 0 ? `<div style="font-size:8px;color:#778;margin-top:2px">${dupes} duplicata${dupes>1?'s':''}</div>` : ''}
-        ${isEquipped ? '<div style="font-size:7px;color:#88ffaa;margin-top:3px">✓ equipado no deck</div>' : ''}`;
+        ${starsHtml}
+        ${barHtml}
+        ${dupesHtml}`;
     }
+
     div.style.cursor = isOwned ? 'pointer' : 'default';
     if(isOwned) div.addEventListener('click', () => openArtifactModal(id, 'album'));
     grid.appendChild(div);
@@ -2139,3 +2177,98 @@ function buyChestFromShop() {
   _chestClickCount = 0;
   openChestOverlay();
 }
+
+
+// ─── NAVEGAÇÃO POR TECLADO NO MENU PRINCIPAL ───────────────────────────────
+(function() {
+  // Ordem dos botões do menu principal
+  const MENU_ACTIONS = [
+    { label: 'JOGAR',     fn: () => startGame() },
+    { label: 'BARALHO',   fn: () => openDeckScreen() },
+    { label: 'LOJA',      fn: () => openShopScreen() },
+    { label: 'ARTEFATOS', fn: () => openArtifactScreen() },
+    { label: 'OPÇÕES',    fn: () => openOptionsScreen() },
+  ];
+
+  let _menuIndex = -1; // -1 = nenhum selecionado ainda
+
+  function _isMainMenuVisible() {
+    const m = document.getElementById('main-menu');
+    return m && m.style.display !== 'none' && !gameStarted;
+  }
+
+  function _isOnlyMainMenuOpen() {
+    // Retorna true se só o menu principal está visível (sem submenus abertos)
+    const subScreens = [
+      'deck-screen', 'shop-screen', 'artifact-screen',
+      'options-screen', 'card-modal', 'buff-tree-modal', 'chest-overlay'
+    ];
+    for (const id of subScreens) {
+      const el = document.getElementById(id);
+      if (el && el.style.display !== 'none' && el.style.display !== '') return false;
+    }
+    return true;
+  }
+
+  function _getMenuBtns() {
+    return Array.from(document.querySelectorAll('#main-menu .menu-btn'));
+  }
+
+  function _highlight(index) {
+    const btns = _getMenuBtns();
+    btns.forEach((b, i) => {
+      if (i === index) {
+        b.classList.add('kb-selected');
+        b.focus();
+        if (typeof Audio !== 'undefined' && Audio.menuHover) Audio.menuHover();
+      } else {
+        b.classList.remove('kb-selected');
+      }
+    });
+    _menuIndex = index;
+  }
+
+  function _clearHighlight() {
+    _getMenuBtns().forEach(b => b.classList.remove('kb-selected'));
+    _menuIndex = -1;
+  }
+
+  document.addEventListener('keydown', function(e) {
+    if (!_isMainMenuVisible() || !_isOnlyMainMenuOpen()) {
+      // Limpa seleção ao sair do menu
+      if (_menuIndex !== -1) _clearHighlight();
+      return;
+    }
+
+    const btns = _getMenuBtns();
+    if (!btns.length) return;
+
+    if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
+      e.preventDefault();
+      const next = _menuIndex < btns.length - 1 ? _menuIndex + 1 : 0;
+      _highlight(next);
+    } else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
+      e.preventDefault();
+      const prev = _menuIndex > 0 ? _menuIndex - 1 : btns.length - 1;
+      _highlight(prev);
+    } else if (e.key === 'Enter' || e.key === ' ') {
+      if (_menuIndex >= 0 && _menuIndex < btns.length) {
+        e.preventDefault();
+        btns[_menuIndex].click();
+      } else {
+        // Enter sem nada selecionado → seleciona o primeiro
+        e.preventDefault();
+        _highlight(0);
+      }
+    } else if (e.key === 'Escape') {
+      _clearHighlight();
+    }
+  });
+
+  // Remove destaque ao usar o mouse
+  document.addEventListener('mousemove', function() {
+    if (_menuIndex !== -1 && _isMainMenuVisible()) {
+      _clearHighlight();
+    }
+  });
+})();
