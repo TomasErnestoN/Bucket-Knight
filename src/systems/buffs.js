@@ -339,7 +339,7 @@ function showBuffScreen(dungeonNum) {
   buffScreenActive = true;
   paused = true;
   if(typeof Audio !== 'undefined' && Audio.playBuffMusic) {
-    Audio.stopDungeonMusic(false);
+    Audio.stopDungeonMusic(true); // salva posição para retomar depois
     Audio.playBuffMusic();
   }
 
