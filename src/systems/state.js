@@ -152,6 +152,24 @@ let gameOver = false;
 let keys = {};
 let paused = false;
 let lastTime = 0;
+
+// ── Efeitos ambientes da dungeon ──────────────────────────────
+let dungeonTime = 0; // tempo acumulado em segundos (para animações)
+const AMBIENT_COUNT = 28;
+let ambientParticles = Array.from({length: AMBIENT_COUNT}, (_, i) => ({
+  x: 0, y: 0, r: 0, vx: 0, vy: 0, alpha: 0, life: Math.random(),
+  hue: 0, wobble: Math.random() * Math.PI * 2,
+}));
+function resetAmbientParticle(p, DX, DY, DS) {
+  p.x = DX + Math.random() * DS;
+  p.y = DY + DS * 0.5 + Math.random() * DS * 0.6;
+  p.r = 0.5 + Math.random() * 2.0;
+  p.vx = (Math.random() - 0.5) * 0.25;
+  p.vy = -0.3 - Math.random() * 0.5;
+  p.alpha = 0.18 + Math.random() * 0.45;
+  p.life = 0;
+  p.wobble = Math.random() * Math.PI * 2;
+}
 let gameLoopStarted = false;
 let slimeSpawnTimer = 0;
 

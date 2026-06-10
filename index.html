@@ -452,20 +452,86 @@
 
 <!-- TELA DE OPÇÕES -->
 <div id="options-screen">
-  <h2>⚙ OPÇÕES</h2>
-  <div class="options-section">
-    <div class="options-label">ÁUDIO</div>
-    <button id="options-sound-btn" class="options-toggle-btn" onclick="toggleOptionsSound()">🔊 Som: LIGADO</button>
+  <div class="options-header">
+    <div class="options-header-deco">▸▸▸</div>
+    <h2>⚙ OPÇÕES</h2>
+    <div class="options-header-deco">◂◂◂</div>
   </div>
+
+  <div class="options-divider"></div>
+
+  <!-- ÁUDIO -->
   <div class="options-section">
-    <div class="options-label">TELA</div>
-    <button id="options-fullscreen-btn" class="options-toggle-btn" onclick="toggleFullscreen()">⛶ Tela Cheia</button>
+    <div class="options-label">▌ ÁUDIO</div>
+    <div class="options-row">
+      <button id="options-sound-btn" class="options-toggle-btn" onclick="toggleOptionsSound()">🔊 Som: LIGADO</button>
+    </div>
+    <div class="options-row options-volume-row">
+      <span class="options-vol-icon" id="options-vol-icon">🔊</span>
+      <input type="range" id="options-volume-slider" class="options-volume-slider"
+             min="0" max="100" value="50"
+             oninput="onOptionsVolumeChange(this.value)"
+             onchange="onOptionsVolumeChange(this.value)">
+      <span class="options-vol-pct" id="options-vol-pct">50%</span>
+    </div>
   </div>
+
+  <div class="options-divider"></div>
+
+  <!-- TELA -->
   <div class="options-section">
-    <div class="options-label">DADOS</div>
-    <button class="options-toggle-btn options-danger-btn" onclick="openEraseConfirm()">🗑 Apagar Dados</button>
+    <div class="options-label">▌ TELA</div>
+    <div class="options-row">
+      <button id="options-fullscreen-btn" class="options-toggle-btn" onclick="toggleFullscreen()">⛶ Tela Cheia</button>
+    </div>
+    <div class="options-row">
+      <button id="options-effects-btn" class="options-toggle-btn" onclick="toggleOptionsEffects()">✦ Efeitos: LIGADO</button>
+    </div>
   </div>
+
+  <div class="options-divider"></div>
+
+  <!-- CONTROLES -->
+  <div class="options-section">
+    <div class="options-label">▌ CONTROLES</div>
+    <div class="options-keybinds">
+      <div class="options-key-row"><span class="options-key">WASD</span><span class="options-key-desc">Mover</span></div>
+      <div class="options-key-row"><span class="options-key">SPACE</span><span class="options-key-desc">Dash</span></div>
+      <div class="options-key-row"><span class="options-key">1–3</span><span class="options-key-desc">Usar Carta</span></div>
+      <div class="options-key-row"><span class="options-key">Q</span><span class="options-key-desc">Carta Especial</span></div>
+      <div class="options-key-row"><span class="options-key">ESC</span><span class="options-key-desc">Pausar</span></div>
+      <div class="options-key-row"><span class="options-key">🖱 DIR</span><span class="options-key-desc">Excluir Carta</span></div>
+    </div>
+  </div>
+
+  <div class="options-divider"></div>
+
+  <!-- CÓDIGOS -->
+  <div class="options-section">
+    <div class="options-label">▌ CÓDIGOS</div>
+    <div class="options-row options-code-row">
+      <input type="text" id="options-code-input" class="options-code-input"
+             placeholder="Digite um código..."
+             autocomplete="off" spellcheck="false"
+             onkeydown="onOptionsCodeKeydown(event)">
+      <button class="options-code-btn" onclick="submitOptionsCode()">OK</button>
+    </div>
+    <div id="options-code-feedback" class="options-code-feedback"></div>
+  </div>
+
+  <div class="options-divider"></div>
+
+  <!-- DADOS -->
+  <div class="options-section">
+    <div class="options-label">▌ DADOS</div>
+    <div class="options-row">
+      <button class="options-toggle-btn options-danger-btn" onclick="openEraseConfirm()">🗑 Apagar Dados</button>
+    </div>
+  </div>
+
   <button class="back-btn" onclick="closeOptionsScreen()">← VOLTAR</button>
+
+  <div class="options-version">BUCKET KNIGHT · v0.9</div>
 </div>
 
 <!-- Modal de confirmação de apagar dados -->
@@ -491,7 +557,9 @@
     <div id="pause-hint">ESC para continuar</div>
     <div id="pause-actions">
       <button class="pause-btn" onclick="resumeFromPause()">▶ CONTINUAR</button>
+      <button id="pause-debug-btn" class="pause-btn pause-debug" onclick="openDebugScreen()" style="display:none">🛠 TELA DE DEBUG</button>
       <button id="pause-sound-btn" class="pause-btn pause-sound" onclick="togglePauseSound()">🔊 Desativar som</button>
+      <button id="pause-effects-btn" class="pause-btn pause-effects" onclick="toggleFancyEffects()">✦ Efeitos: LIGADO</button>
       <button class="pause-btn pause-menu" onclick="pauseBackToMenu()">⌂ VOLTAR AO MENU</button>
     </div>
   </div>
@@ -684,5 +752,16 @@
     requestAnimationFrame(frame);
   })();
 </script>
+
+<!-- TELA DE DEBUG (dungeon) -->
+<div id="debug-screen">
+  <div id="debug-modal">
+    <div id="debug-title">🛠 DEBUG</div>
+    <button id="debug-phase-toggle" class="debug-phase-toggle-btn" onclick="toggleDebugPhaseList()">📋 SELECIONAR FASE ▾</button>
+    <div id="debug-dungeon-grid" style="display:none"></div>
+    <button class="debug-close-btn" onclick="closeDebugScreen()">✕ FECHAR</button>
+  </div>
+</div>
+
 </body>
 </html>

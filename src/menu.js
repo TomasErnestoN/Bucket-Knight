@@ -1077,6 +1077,8 @@ function openOptionsScreen() {
   document.getElementById('main-menu').style.display = 'none';
   updateOptionsSoundLabel();
   updateOptionsFullscreenLabel();
+  updateOptionsEffectsLabel();
+  updateOptionsVolumeSlider();
   document.getElementById('options-screen').style.display = 'flex';
 }
 
@@ -1133,6 +1135,7 @@ function updateOptionsSoundLabel() {
 function toggleOptionsSound() {
   if(typeof Audio !== 'undefined' && Audio.toggleMute) Audio.toggleMute();
   updateOptionsSoundLabel();
+  updateOptionsVolumeSlider();
   // Sincroniza com tela de pause se estiver aberta
   if(typeof updatePauseSoundLabel === 'function') updatePauseSoundLabel();
 }
@@ -1144,24 +1147,57 @@ function updateOptionsFullscreenLabel() {
   btn.textContent = isFS ? '✕ Sair da Tela Cheia' : '⛶ Tela Cheia';
 }
 
+function updateOptionsEffectsLabel() {
+  const btn = document.getElementById('options-effects-btn');
+  if(!btn) return;
+  const on = typeof fancyEffects !== 'undefined' ? fancyEffects : true;
+  btn.textContent = on ? '✦ Efeitos: LIGADO' : '✧ Efeitos: DESLIGADO';
+  btn.style.borderColor = on ? '#4444aa' : '#444466';
+  btn.style.color = on ? '#aaaaff' : '#444466';
+  btn.style.opacity = on ? '1' : '0.55';
+}
+
+function toggleOptionsEffects() {
+  if(typeof toggleFancyEffects === 'function') toggleFancyEffects();
+  updateOptionsEffectsLabel();
+}
+
 // Atualiza o label ao mudar fullscreen por qualquer meio (ex: tecla Esc)
 document.addEventListener('fullscreenchange', updateOptionsFullscreenLabel);
 document.addEventListener('webkitfullscreenchange', updateOptionsFullscreenLabel);
 
+function updateOptionsVolumeSlider() {
+  const slider = document.getElementById('options-volume-slider');
+  const pct = document.getElementById('options-vol-pct');
+  const icon = document.getElementById('options-vol-icon');
+  if (!slider) return;
+  const vol = (typeof Audio !== 'undefined' && Audio.getVolume) ? Audio.getVolume() : 0.5;
+  const val = Math.round(vol * 100);
+  slider.value = val;
+  if (pct) pct.textContent = val + '%';
+  if (icon) icon.textContent = val === 0 ? '🔇' : val < 50 ? '🔉' : '🔊';
+  slider.style.setProperty('--vol-pct', val + '%');
+  // Atualiza o fill do slider via CSS custom property
+  slider.style.background = `linear-gradient(90deg, #4444cc ${val}%, #1a1a44 ${val}%)`;
+}
+
+function onOptionsVolumeChange(val) {
+  const v = parseInt(val) / 100;
+  if (typeof Audio !== 'undefined' && Audio.setVolume) Audio.setVolume(v);
+  updateOptionsVolumeSlider();
+  updateOptionsSoundLabel();
+  if (typeof updatePauseSoundLabel === 'function') updatePauseSoundLabel();
+}
+
 // ═══════════════════════════════════════════════════════════════
-// CHEATS
+// CHEATS (teclado — apenas "super" no pause permanece)
 // ═══════════════════════════════════════════════════════════════
 let cheatBuffer = '';
 document.addEventListener('keydown', (e) => {
-  const shopOpen = document.getElementById('shop-screen').style.display === 'flex';
   const isPaused = typeof paused !== 'undefined' && paused && gameStarted;
-  if(!shopOpen && !isPaused) return;
+  if(!isPaused) return;
   cheatBuffer += e.key.toLowerCase();
   if(cheatBuffer.length > 20) cheatBuffer = cheatBuffer.slice(-20);
-  if(shopOpen && cheatBuffer.includes('dinheiro')){
-    persistentGold += 10000; updateMenuGold(); renderShopScreen(); writeSave();
-    alert('💰 +10.000 moedas'); cheatBuffer = '';
-  }
   if(isPaused && cheatBuffer.includes('super')){
     if(equippedSpecial === 'glitch_fury'){
       glitchFuryCharge = 3; glitchFuryReady = true;
@@ -1173,6 +1209,78 @@ document.addEventListener('keydown', (e) => {
     cheatBuffer = '';
   }
 });
+
+// ═══════════════════════════════════════════════════════════════
+// ÁREA DE CÓDIGOS (tela de opções)
+// ═══════════════════════════════════════════════════════════════
+const OPTION_CODES = {
+  'dinheiro': () => {
+    persistentGold += 10000; updateMenuGold(); writeSave();
+    return '💰 +10.000 moedas';
+  },
+  'allart': () => {
+    const ids = Object.keys(ARTIFACT_DEFS);
+    ids.forEach(id => { if(!ownedArtifacts.includes(id)) ownedArtifacts.push(id); });
+    writeSave();
+    if(typeof renderArtifactCollectionGrid === 'function') renderArtifactCollectionGrid();
+    return `🏺 ${ids.length} artefatos desbloqueados!`;
+  },
+  'maxart': () => {
+    const ids = Object.keys(ARTIFACT_DEFS);
+    ids.forEach(id => {
+      if(!ownedArtifacts.includes(id)) ownedArtifacts.push(id);
+      if(ARTIFACT_UPGRADE_TABLES[id] !== undefined) {
+        const needed = 1 + 5 + 10 + 20 + 30;
+        const current = ownedArtifacts.filter(x => x === id).length;
+        for(let i = 0; i < needed - current; i++) ownedArtifacts.push(id);
+      }
+    });
+    writeSave();
+    if(typeof renderArtifactCollectionGrid === 'function') renderArtifactCollectionGrid();
+    return `🏺 ${ids.length} artefatos no nível máximo!`;
+  },
+  'allcard': () => {
+    const ids = ['sword','meat','bow','axe','speed_potion','blast','bombinhas',
+      'katana','necro_staff','pistol','black_magic','dice','scythe','soccerball',
+      'sniper_noscope','glitch_fury'];
+    ids.forEach(id => { if(!ownedCards.includes(id)) ownedCards.push(id); });
+    writeSave();
+    if(typeof renderShopScreen === 'function') renderShopScreen();
+    return `🃏 ${ids.length} cartas desbloqueadas!`;
+  },
+  'debugger': () => {
+    const v = typeof setDebuggerActive === 'function';
+    if(!v) return '⚠ Reinicie o jogo para aplicar';
+    const nowActive = !(typeof debuggerActive !== 'undefined' && debuggerActive);
+    setDebuggerActive(nowActive);
+    return nowActive ? '🛠 Modo debug ATIVADO' : '🛠 Modo debug DESATIVADO';
+  },
+};
+
+function submitOptionsCode() {
+  const input = document.getElementById('options-code-input');
+  const feedback = document.getElementById('options-code-feedback');
+  if(!input || !feedback) return;
+  const code = input.value.trim().toLowerCase();
+  input.value = '';
+  if(OPTION_CODES[code]) {
+    const msg = OPTION_CODES[code]();
+    feedback.textContent = msg;
+    feedback.className = 'options-code-feedback success';
+  } else {
+    feedback.textContent = '✗ Código inválido';
+    feedback.className = 'options-code-feedback error';
+  }
+  clearTimeout(feedback._timer);
+  feedback._timer = setTimeout(() => {
+    feedback.textContent = '';
+    feedback.className = 'options-code-feedback';
+  }, 2500);
+}
+
+function onOptionsCodeKeydown(e) {
+  if(e.key === 'Enter') { e.preventDefault(); submitOptionsCode(); }
+}
 
 // currentEquippedDeck declared in state.js
 updateMenuGold();
@@ -2270,5 +2378,386 @@ function buyChestFromShop() {
     if (_menuIndex !== -1 && _isMainMenuVisible()) {
       _clearHighlight();
     }
+  });
+})();
+
+// ═══════════════════════════════════════════════════════════════
+// NAVEGAÇÃO POR TECLADO — BARALHO / LOJA / ARTEFATOS
+// ═══════════════════════════════════════════════════════════════
+(function() {
+  const SCREENS = [
+    {
+      id: 'shop-screen',
+      itemSel: '.shop-card',
+      close: () => closeShopScreen(),
+      isModalOpen: () => document.getElementById('card-modal-overlay').classList.contains('open'),
+      closeModal: () => closeCardModal(),
+    },
+    {
+      id: 'deck-screen',
+      itemSel: '.coll-card, .deck-slot.filled',
+      close: () => closeDeckScreen(),
+      isModalOpen: () => document.getElementById('card-modal-overlay').classList.contains('open'),
+      closeModal: () => closeCardModal(),
+    },
+    {
+      id: 'artifact-screen',
+      itemSel: '.artifact-card:not(.not-owned)',
+      close: () => closeArtifactScreen(),
+      isModalOpen: () => document.getElementById('artifact-modal-overlay').classList.contains('open'),
+      closeModal: () => closeArtifactModal(),
+    },
+  ];
+
+  // Modal de carta (dentro de qualquer tela)
+  const CARD_MODAL_SCREENS = [
+    {
+      id: 'card-modal-overlay',
+      btnSel: '#modal-actions .modal-btn',
+      close: () => closeCardModal(),
+    },
+    {
+      id: 'artifact-modal-overlay',
+      btnSel: '#art-modal-actions .modal-btn',
+      close: () => closeArtifactModal(),
+    },
+  ];
+
+  let _idx    = -1;
+  let _screen = null;
+  let _modalIdx = -1;
+  let _modalScreen = null;
+
+  // ─── helpers ─────────────────────────────────────────────────
+  function _isOpen(s) {
+    const el = document.getElementById(s.id);
+    if (!el) return false;
+    if (el.classList.contains('open')) return true;
+    return el.style.display !== 'none' && el.style.display !== '';
+  }
+
+  function _activeScreen() { return SCREENS.find(_isOpen) || null; }
+  function _activeModal()  { return CARD_MODAL_SCREENS.find(_isOpen) || null; }
+
+  function _getItems(s) {
+    const el = document.getElementById(s.id);
+    if (!el) return [];
+    return Array.from(el.querySelectorAll(s.itemSel)).filter(el => {
+      const r = el.getBoundingClientRect();
+      return r.width > 0 && r.height > 0;
+    });
+  }
+
+  function _getModalBtns(m) {
+    return Array.from(document.querySelectorAll(m.btnSel));
+  }
+
+  // Calcula quantas colunas tem a grade medindo as posições X dos itens
+  function _getCols(items) {
+    if (!items.length) return 1;
+    const firstX = Math.round(items[0].getBoundingClientRect().left);
+    let cols = 1;
+    for (let i = 1; i < items.length; i++) {
+      const x = Math.round(items[i].getBoundingClientRect().left);
+      if (x <= firstX + 4) break; // voltou para a coluna inicial = nova linha
+      cols++;
+    }
+    return cols;
+  }
+
+  // ─── highlight de grade ──────────────────────────────────────
+  function _highlight(items, idx) {
+    items.forEach((el, i) => {
+      if (i === idx) {
+        el.classList.add('kb-selected');
+        el.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+        if (typeof Audio !== 'undefined' && Audio.menuHover) Audio.menuHover();
+      } else {
+        el.classList.remove('kb-selected');
+      }
+    });
+    _idx = idx;
+  }
+
+  function _clearHighlight(s) {
+    if (!s) return;
+    _getItems(s).forEach(el => el.classList.remove('kb-selected'));
+    _idx = -1;
+  }
+
+  // ─── highlight do modal ──────────────────────────────────────
+  function _highlightModal(btns, idx) {
+    btns.forEach((b, i) => {
+      if (i === idx) { b.classList.add('kb-selected'); b.focus(); }
+      else           { b.classList.remove('kb-selected'); }
+    });
+    _modalIdx = idx;
+  }
+
+  function _clearModalHighlight(m) {
+    if (!m) return;
+    _getModalBtns(m).forEach(b => b.classList.remove('kb-selected'));
+    _modalIdx = -1;
+  }
+
+  // ─── navegação 2D ────────────────────────────────────────────
+  function _move(items, key) {
+    const n    = items.length;
+    const cols = _getCols(items);
+    const cur  = _idx;
+
+    if (key === 'ArrowRight') {
+      const next = cur < n - 1 ? cur + 1 : 0;
+      _highlight(items, next);
+    } else if (key === 'ArrowLeft') {
+      const prev = cur > 0 ? cur - 1 : n - 1;
+      _highlight(items, prev);
+    } else if (key === 'ArrowDown') {
+      if (cur === -1) { _highlight(items, 0); return; }
+      const next = cur + cols;
+      _highlight(items, next < n ? next : cur % cols); // wraps to first row
+    } else if (key === 'ArrowUp') {
+      if (cur === -1) { _highlight(items, 0); return; }
+      const prev = cur - cols;
+      if (prev >= 0) {
+        _highlight(items, prev);
+      } else {
+        // sobe para a última linha na mesma coluna
+        const col       = cur % cols;
+        const lastRowStart = Math.floor((n - 1) / cols) * cols;
+        const target    = lastRowStart + col;
+        _highlight(items, target < n ? target : lastRowStart);
+      }
+    }
+  }
+
+  // ─── keydown ─────────────────────────────────────────────────
+  document.addEventListener('keydown', function(e) {
+    const s = _activeScreen();
+    const m = _activeModal();
+
+    // Modal de carta/artefato aberto — navega nos botões de ação
+    if (m) {
+      const btns = _getModalBtns(m);
+      const KEYS = ['ArrowDown','ArrowRight','ArrowUp','ArrowLeft','Enter',' ','Escape'];
+      if (!KEYS.includes(e.key)) return;
+      e.preventDefault();
+
+      if (e.key === 'Escape') {
+        _clearModalHighlight(m); _modalScreen = null;
+        m.close();
+        return;
+      }
+      if (!btns.length) return;
+
+      if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
+        const next = _modalIdx < btns.length - 1 ? _modalIdx + 1 : 0;
+        _highlightModal(btns, next);
+      } else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
+        const prev = _modalIdx > 0 ? _modalIdx - 1 : btns.length - 1;
+        _highlightModal(btns, prev);
+      } else if (e.key === 'Enter' || e.key === ' ') {
+        if (_modalIdx >= 0 && _modalIdx < btns.length) {
+          btns[_modalIdx].click();
+        } else {
+          _highlightModal(btns, 0);
+        }
+      }
+      return;
+    }
+
+    if (!s) {
+      if (_idx !== -1 && _screen) { _clearHighlight(_screen); _screen = null; }
+      return;
+    }
+
+    // Trocou de tela — reseta
+    if (_screen !== s) {
+      if (_screen) _clearHighlight(_screen);
+      _screen = s;
+      _idx = -1;
+    }
+
+    const items = _getItems(s);
+    const KEYS2 = ['ArrowDown','ArrowRight','ArrowUp','ArrowLeft','Enter',' ','Escape'];
+    if (!KEYS2.includes(e.key)) return;
+    e.preventDefault();
+
+    if (!items.length) return;
+
+    if (['ArrowDown','ArrowRight','ArrowUp','ArrowLeft'].includes(e.key)) {
+      if (_idx === -1) { _highlight(items, 0); return; }
+      _move(items, e.key);
+    } else if (e.key === 'Enter' || e.key === ' ') {
+      if (_idx >= 0 && _idx < items.length) {
+        items[_idx].click();
+        // Prepara o modal para navegação com teclado
+        setTimeout(() => {
+          const mOpened = _activeModal();
+          if (mOpened) {
+            const btns = _getModalBtns(mOpened);
+            if (btns.length) _highlightModal(btns, 0);
+          }
+        }, 60);
+      } else {
+        _highlight(items, 0);
+      }
+    } else if (e.key === 'Escape') {
+      _clearHighlight(s);
+      _screen = null;
+      s.close();
+    }
+  });
+
+  // Remove destaque ao usar o mouse
+  document.addEventListener('mousemove', function() {
+    if (_idx !== -1 && _screen && _isOpen(_screen)) _clearHighlight(_screen);
+    if (_modalIdx !== -1 && _modalScreen && _isOpen(_modalScreen)) _clearModalHighlight(_modalScreen);
+  });
+})();
+
+// ═══════════════════════════════════════════════════════════════
+// NAVEGAÇÃO POR TECLADO — TELA DE OPÇÕES
+// ═══════════════════════════════════════════════════════════════
+(function() {
+  let _optIndex = -1;
+
+  function _isOptionsOpen() {
+    const el = document.getElementById('options-screen');
+    return el && el.style.display !== 'none' && el.style.display !== '';
+  }
+
+  function _isEraseConfirmOpen() {
+    const el = document.getElementById('erase-confirm-overlay');
+    return el && el.classList.contains('open');
+  }
+
+  function _getOptionsBtns() {
+    return Array.from(document.querySelectorAll(
+      '#options-screen .options-toggle-btn, #options-screen .back-btn'
+    ));
+  }
+
+  function _highlight(index) {
+    const btns = _getOptionsBtns();
+    btns.forEach((b, i) => {
+      if (i === index) {
+        b.classList.add('kb-selected');
+        b.focus();
+        if (typeof Audio !== 'undefined' && Audio.menuHover) Audio.menuHover();
+      } else {
+        b.classList.remove('kb-selected');
+      }
+    });
+    _optIndex = index;
+  }
+
+  function _clearHighlight() {
+    _getOptionsBtns().forEach(b => b.classList.remove('kb-selected'));
+    _optIndex = -1;
+  }
+
+  // Quando a tela de opções abre, seleciona o primeiro botão automaticamente
+  const _origOpen = window.openOptionsScreen;
+  window.openOptionsScreen = function() {
+    _origOpen && _origOpen();
+    setTimeout(() => { if (_isOptionsOpen()) _highlight(0); }, 30);
+  };
+
+  // Quando fecha, limpa seleção
+  const _origClose = window.closeOptionsScreen;
+  window.closeOptionsScreen = function() {
+    _clearHighlight();
+    _origClose && _origClose();
+  };
+
+  let _eraseIndex = -1;
+
+  function _getEraseBtns() {
+    return Array.from(document.querySelectorAll('#erase-confirm-modal .erase-btn'));
+  }
+
+  function _highlightErase(index) {
+    const btns = _getEraseBtns();
+    btns.forEach((b, i) => {
+      if (i === index) {
+        b.classList.add('kb-selected');
+        b.focus();
+        if (typeof Audio !== 'undefined' && Audio.menuHover) Audio.menuHover();
+      } else {
+        b.classList.remove('kb-selected');
+      }
+    });
+    _eraseIndex = index;
+  }
+
+  function _clearEraseHighlight() {
+    _getEraseBtns().forEach(b => b.classList.remove('kb-selected'));
+    _eraseIndex = -1;
+  }
+
+  // Ao abrir o confirm, seleciona CANCELAR (índice 1) por segurança
+  const _origOpenErase = window.openEraseConfirm;
+  window.openEraseConfirm = function() {
+    _origOpenErase && _origOpenErase();
+    setTimeout(() => { if (_isEraseConfirmOpen()) _highlightErase(1); }, 30);
+  };
+
+  const _origCloseErase = window.closeEraseConfirm;
+  window.closeEraseConfirm = function() {
+    _clearEraseHighlight();
+    _origCloseErase && _origCloseErase();
+  };
+
+  document.addEventListener('keydown', function(e) {
+    if (_isEraseConfirmOpen()) {
+      const KEYS = ['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Enter',' ','Escape'];
+      if (!KEYS.includes(e.key)) return;
+      e.preventDefault();
+      const btns = _getEraseBtns();
+      if (e.key === 'Escape') {
+        closeEraseConfirm();
+      } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+        _highlightErase(_eraseIndex > 0 ? _eraseIndex - 1 : btns.length - 1);
+      } else if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+        _highlightErase(_eraseIndex < btns.length - 1 ? _eraseIndex + 1 : 0);
+      } else if (e.key === 'Enter' || e.key === ' ') {
+        if (_eraseIndex >= 0) btns[_eraseIndex].click();
+      }
+      return;
+    }
+
+    if (!_isOptionsOpen()) {
+      if (_optIndex !== -1) _clearHighlight();
+      return;
+    }
+
+    const btns = _getOptionsBtns();
+    if (!btns.length) return;
+
+    if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
+      e.preventDefault();
+      const next = _optIndex < btns.length - 1 ? _optIndex + 1 : 0;
+      _highlight(next);
+    } else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
+      e.preventDefault();
+      const prev = _optIndex > 0 ? _optIndex - 1 : btns.length - 1;
+      _highlight(prev);
+    } else if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      if (_optIndex >= 0 && _optIndex < btns.length) {
+        btns[_optIndex].click();
+      } else {
+        _highlight(0);
+      }
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      closeOptionsScreen();
+    }
+  });
+
+  // Remove destaque ao usar o mouse
+  document.addEventListener('mousemove', function() {
+    if (_optIndex !== -1 && _isOptionsOpen()) _clearHighlight();
   });
 })();
