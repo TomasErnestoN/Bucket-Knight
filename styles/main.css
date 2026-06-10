@@ -2,7 +2,7 @@
 body { background: #0a0a0f; overflow: hidden; font-family: 'Courier New', monospace; cursor: crosshair; }
 canvas { display: block; }
 #ui { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
-.card { width: 68px; height: 95px; background: linear-gradient(145deg, #1a1a2e, #16213e); border: 2px solid #4a4a8a; border-radius: 8px; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #e0e0ff; font-weight: bold; transition: transform 0.15s, border-color 0.15s, opacity 0.2s; user-select: none; padding: 4px; position: relative; }
+.card { width: 68px; height: 95px; background: transparent; border: 1px solid rgba(100,100,160,0.5); border-radius: 8px; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #e0e0ff; font-weight: bold; transition: transform 0.15s, border-color 0.15s, opacity 0.2s, box-shadow 0.15s; user-select: none; padding: 4px; position: relative; }
 .card:hover { transform: translateY(-8px); border-color: #8888ff; }
 .card.disabled { opacity: 0.4; cursor: not-allowed; }
 .card.disabled:hover { transform: none; }
@@ -42,8 +42,8 @@ canvas { display: block; }
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
-  padding-bottom: 10px;
+  gap: 6px;
+  padding-bottom: 12px;
   pointer-events: none;
   width: max-content;
   max-width: 98vw;
@@ -55,8 +55,11 @@ canvas { display: block; }
   align-items: flex-end;
   justify-content: space-between;
   width: 100%;
-  padding: 0 2px;
-  gap: 6px;
+  padding: 6px 10px;
+  gap: 10px;
+  background: linear-gradient(180deg, rgba(5,5,18,0) 0%, rgba(5,5,18,0.72) 100%);
+  border-top: 1px solid rgba(80,80,140,0.25);
+  border-radius: 12px 12px 0 0;
 }
 
 /* Esquerda: roll bar + mana bar + pips */
@@ -64,67 +67,71 @@ canvas { display: block; }
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 3px;
+  gap: 5px;
   pointer-events: none;
-  min-width: 80px;
+  min-width: 90px;
   max-width: 160px;
 }
 
-/* Barra de roll (branca) */
+/* Barra de roll */
 #roll-bar-wrap { width: 100%; }
 #roll-bar-bg {
   width: 100%;
-  height: 4px;
-  background: #1a1a1a;
-  border: 1px solid #555;
-  border-radius: 3px;
+  height: 5px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(180,180,180,0.18);
+  border-radius: 4px;
   overflow: hidden;
 }
 #roll-bar-fill {
   height: 100%;
   width: 100%;
-  background: linear-gradient(90deg, #aaaaaa, #ffffff);
-  border-radius: 3px;
+  background: linear-gradient(90deg, #888888, #ffffff);
+  border-radius: 4px;
   transition: width 0.05s linear;
+  box-shadow: 0 0 6px rgba(255,255,255,0.4);
 }
 
-/* Barra de carga de mana (azul) */
+/* Barra de carga de mana */
 #mana-charge-bar-wrap { width: 100%; }
 #mana-charge-bar-bg {
   width: 100%;
-  height: 4px;
-  background: #0a0a2a;
-  border: 1px solid #2233aa;
-  border-radius: 3px;
+  height: 5px;
+  background: rgba(30,40,120,0.3);
+  border: 1px solid rgba(60,90,200,0.3);
+  border-radius: 4px;
   overflow: hidden;
 }
 #mana-charge-bar-fill {
   height: 100%;
   width: 0%;
-  background: linear-gradient(90deg, #2255bb, #66aaff);
-  border-radius: 3px;
+  background: linear-gradient(90deg, #1a44bb, #55aaff);
+  border-radius: 4px;
   transition: width 0.1s linear;
+  box-shadow: 0 0 8px rgba(80,160,255,0.5);
 }
 
 /* Bolinhas de mana */
 #mana-pips { display: flex; flex-wrap: wrap; gap: 4px; max-width: 160px; }
-.mana-pip { width: 16px; height: 16px; border-radius: 50%; background: #1a1a3e; border: 2px solid #4444aa; transition: background 0.3s; flex-shrink: 0; }
-.mana-pip.full { background: #4488ff; border-color: #88bbff; box-shadow: 0 0 6px #4488ff; }
+.mana-pip { width: 14px; height: 14px; border-radius: 50%; background: rgba(20,20,60,0.4); border: 1px solid rgba(60,60,160,0.5); transition: background 0.3s, box-shadow 0.3s; flex-shrink: 0; }
+.mana-pip.full { background: radial-gradient(circle at 35% 35%, #88ccff, #2266cc); border-color: #6699ff; box-shadow: 0 0 7px #4488ffaa, 0 0 2px #88ccff inset; }
 
 /* Centro: ouro */
 #hud-center {
   display: flex;
-  align-items: flex-end;
-  justify-content: center;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
   pointer-events: none;
   flex: 1;
+  gap: 4px;
 }
 #gold-display-hud {
   color: #ffd700;
-  font-size: 14px;
+  font-size: 13px;
   font-family: 'Courier New', monospace;
   letter-spacing: 2px;
-  text-shadow: 0 0 8px #ffd70088;
+  text-shadow: 0 0 10px rgba(255,215,0,0.6);
   white-space: nowrap;
 }
 
@@ -134,50 +141,52 @@ canvas { display: block; }
   align-items: flex-end;
   justify-content: flex-end;
   pointer-events: none;
-  min-width: 80px;
+  min-width: 90px;
   max-width: 160px;
 }
 #hp-display-new {
   display: flex;
   flex-wrap: wrap-reverse;
   justify-content: flex-end;
-  gap: 1px;
-  font-size: 18px;
-  line-height: 1.15;
-  color: #ff6666;
+  gap: 2px;
+  font-size: 16px;
+  line-height: 1.2;
+  color: #ff5555;
   max-width: 160px;
+  filter: drop-shadow(0 0 4px rgba(255,60,60,0.5));
 }
 
 /* Linha de cartas + especial */
 #hud-cards-row {
   display: flex;
   align-items: flex-end;
-  gap: 6px;
+  gap: 8px;
   pointer-events: none;
 }
-#cards-area { display: flex; gap: 8px; pointer-events: all; flex-shrink: 0; }
+#cards-area { display: flex; gap: 6px; pointer-events: all; flex-shrink: 0; }
 
-/* ── PRÓXIMAS CARTAS (Clash Royale style) ── */
+/* ── PRÓXIMAS CARTAS ── */
 #next-cards-panel {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 3px;
   pointer-events: none;
-  padding: 5px 6px;
-  background: rgba(8,8,24,0.75);
-  border: 1px solid #2a2a55;
+  padding: 6px 5px;
+  background: rgba(8,8,22,0.45);
+  border: 1px solid rgba(40,40,80,0.5);
   border-radius: 8px;
   min-width: 48px;
   flex-shrink: 0;
 }
 #next-cards-label {
-  font-size: 7px;
-  color: #555577;
-  letter-spacing: 1px;
+  font-size: 6px;
+  color: rgba(100,100,140,0.8);
+  letter-spacing: 1.5px;
   font-family: 'Courier New', monospace;
   font-weight: bold;
   white-space: nowrap;
+  text-transform: uppercase;
 }
 #next-cards-list {
   display: flex;
@@ -188,8 +197,8 @@ canvas { display: block; }
 .next-card-mini {
   width: 36px;
   height: 42px;
-  background: linear-gradient(145deg, #111122, #0d0d1e);
-  border: 1px solid #2a2a55;
+  background: transparent;
+  border: 1px solid rgba(42,42,85,0.6);
   border-radius: 5px;
   display: flex;
   flex-direction: column;
@@ -223,8 +232,8 @@ canvas { display: block; }
 #special-card {
   width: 56px;
   height: 72px;
-  background: linear-gradient(145deg, #1a0a2e, #0e0820);
-  border: 2px solid #ff2288;
+  background: transparent;
+  border: 1px solid rgba(255,34,136,0.6);
   border-radius: 6px;
   cursor: pointer;
   display: flex;

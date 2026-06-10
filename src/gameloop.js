@@ -1285,31 +1285,94 @@ function drawDungeonBackground(def) {
   } else if (theme === 'red') {
     ctx.fillStyle='#060101'; ctx.fillRect(0,0,W,H);
     const bg=ctx.createRadialGradient(W*0.5,H*0.6,0,W*0.5,H*0.5,DIAG*0.6);
-    bg.addColorStop(0,'#160404'); bg.addColorStop(1,'#060101');
+    bg.addColorStop(0,'#1a0404'); bg.addColorStop(1,'#060101');
     ctx.fillStyle=bg; ctx.fillRect(0,0,W,H);
 
     if(!fancyEffects) return;
 
-    const heat=0.06+0.04*Math.sin(dungeonTime*2.1);
+    // Vinheta lateral vermelha pulsante — integrada com o equalizador
+    const sideGlow = 0.18 + 0.10 * Math.sin(dungeonTime * 2.3);
+    const sgL = ctx.createLinearGradient(0,0,W*0.35,0);
+    sgL.addColorStop(0, `rgba(140,10,0,${sideGlow})`);
+    sgL.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = sgL; ctx.fillRect(0,0,W,H);
+    const sgR = ctx.createLinearGradient(W,0,W*0.65,0);
+    sgR.addColorStop(0, `rgba(140,10,0,${sideGlow})`);
+    sgR.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = sgR; ctx.fillRect(0,0,W,H);
+
+    // Calor central — pulsa mais forte
+    const heat=0.09+0.06*Math.sin(dungeonTime*2.1);
     const hg=ctx.createRadialGradient(W/2,H*0.65,0,W/2,H*0.65,DIAG*0.4);
-    hg.addColorStop(0,`rgba(160,20,10,${heat})`); hg.addColorStop(1,'rgba(0,0,0,0)');
+    hg.addColorStop(0,`rgba(200,30,10,${heat})`); hg.addColorStop(1,'rgba(0,0,0,0)');
     ctx.fillStyle=hg; ctx.fillRect(0,0,W,H);
 
-    for(let i=0;i<3;i++){
-      const wy=H*(0.5+i*0.17)+Math.sin(dungeonTime*1.1+i*2.2)*22;
-      const wa=0.04+0.02*Math.sin(dungeonTime*1.5+i);
-      const wg=ctx.createLinearGradient(0,wy-25,0,wy+25);
-      wg.addColorStop(0,'rgba(180,30,10,0)'); wg.addColorStop(0.5,`rgba(180,30,10,${wa})`); wg.addColorStop(1,'rgba(180,30,10,0)');
-      ctx.fillStyle=wg; ctx.fillRect(0,wy-25,W,50);
+    // Ondas de calor horizontais — mais visíveis e variadas
+    for(let i=0;i<4;i++){
+      const wy=H*(0.45+i*0.15)+Math.sin(dungeonTime*1.1+i*2.2)*28;
+      const wa=0.06+0.04*Math.sin(dungeonTime*1.8+i*1.3);
+      const wg=ctx.createLinearGradient(0,wy-30,0,wy+30);
+      wg.addColorStop(0,'rgba(200,30,10,0)'); wg.addColorStop(0.5,`rgba(200,30,10,${wa})`); wg.addColorStop(1,'rgba(200,30,10,0)');
+      ctx.fillStyle=wg; ctx.fillRect(0,wy-30,W,60);
     }
+
+    // Brasas — partículas ambientes mais quentes
     ambientParticles.slice(0,8).forEach(p=>{
       if(p.life>0){
-        const fade=Math.sin(p.life*Math.PI); ctx.save(); ctx.globalAlpha=0.18*fade;
-        const eg=ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,p.r*3);
-        eg.addColorStop(0,'rgba(255,160,40,1)'); eg.addColorStop(1,'rgba(255,50,10,0)');
-        ctx.fillStyle=eg; ctx.beginPath();ctx.arc(p.x,p.y,p.r*3,0,Math.PI*2);ctx.fill(); ctx.restore();
+        const fade=Math.sin(p.life*Math.PI); ctx.save(); ctx.globalAlpha=0.28*fade;
+        const eg=ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,p.r*4);
+        eg.addColorStop(0,'rgba(255,200,60,1)'); eg.addColorStop(0.4,'rgba(255,80,10,0.6)'); eg.addColorStop(1,'rgba(255,50,10,0)');
+        ctx.fillStyle=eg; ctx.beginPath();ctx.arc(p.x,p.y,p.r*4,0,Math.PI*2);ctx.fill(); ctx.restore();
       }
     });
+
+    // ── Fogo de fundo na base da tela ──
+    if(!drawDungeonBackground._fireParticles){
+      drawDungeonBackground._fireParticles = Array.from({length:120},(_,i)=>({
+        x: (i/120)*W, y: H + Math.random()*40,
+        vy: -(0.6+Math.random()*1.8), vx: (Math.random()-0.5)*0.7,
+        life: Math.random(), maxLife: 0.6+Math.random()*0.8,
+        w: 18+Math.random()*40, phase: Math.random()*Math.PI*2,
+      }));
+    }
+    const fp = drawDungeonBackground._fireParticles;
+    for(let i=0;i<fp.length;i++){
+      const f = fp[i];
+      f.life -= 0.008 + Math.random()*0.004;
+      f.y += f.vy;
+      f.x += f.vx + Math.sin(dungeonTime*2.1+f.phase)*0.6;
+      if(f.life <= 0){
+        f.x = Math.random()*W; f.y = H + Math.random()*20;
+        f.vy = -(0.6+Math.random()*1.8); f.vx = (Math.random()-0.5)*0.7;
+        f.life = 0.8+Math.random()*0.2; f.maxLife = f.life;
+        f.w = 18+Math.random()*40;
+      }
+      const t = f.life / f.maxLife;
+      const h = f.w * (2.5 + t*2);
+      const alpha = t * (0.18 + Math.sin(dungeonTime*3+f.phase)*0.04);
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      const fg = ctx.createLinearGradient(f.x, f.y, f.x, f.y - h);
+      fg.addColorStop(0,   `rgba(255,120,0,1)`);
+      fg.addColorStop(0.3, `rgba(255,40,0,0.8)`);
+      fg.addColorStop(0.7, `rgba(180,0,0,0.4)`);
+      fg.addColorStop(1,   `rgba(80,0,0,0)`);
+      ctx.fillStyle = fg;
+      ctx.beginPath();
+      ctx.moveTo(f.x - f.w*0.5, f.y);
+      ctx.quadraticCurveTo(f.x - f.w*0.2, f.y - h*0.5, f.x + Math.sin(f.phase+dungeonTime)*f.w*0.25, f.y - h);
+      ctx.quadraticCurveTo(f.x + f.w*0.2, f.y - h*0.5, f.x + f.w*0.5, f.y);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    }
+
+    // Brilho da base do fogo
+    const fireGlow = ctx.createLinearGradient(0, H, 0, H - 120);
+    fireGlow.addColorStop(0, `rgba(255,60,0,${0.18 + 0.08*Math.sin(dungeonTime*2.7)})`);
+    fireGlow.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = fireGlow;
+    ctx.fillRect(0, H-120, W, 120);
 
   } else if (theme === 'black') {
     ctx.fillStyle='#010002'; ctx.fillRect(0,0,W,H);
@@ -1350,6 +1413,183 @@ function draw(dt){
   ctx.clearRect(0,0,W,H);
   ctx.setTransform(1,0,0,1,0,0); // garante transform limpo a cada frame
   drawDungeonBackground(def);
+
+  // ── Equalizador vermelho — espinhos com brasas (só na dungeon vermelha) ──
+  if(def && def.theme === 'red' && !fancyEffects && draw._eqEmbers){
+    draw._eqEmbers.length = 0; // limpa brasas ao desativar efeitos
+  }
+  if(fancyEffects && def && def.theme === 'red'){
+    if(!draw._eqBars)   draw._eqBars   = new Float32Array(64).fill(0);
+    if(!draw._eqEmbers) draw._eqEmbers = [];
+    const eqBars   = draw._eqBars;
+    const eqEmbers = draw._eqEmbers;
+    const BAR_COUNT = eqBars.length;
+    const freqData  = Audio.getRedFreqData ? Audio.getRedFreqData() : null;
+    const now = Date.now();
+
+    const eqBase  = H;
+    const eqCeil  = DY + DUNGEON_SIZE * 0.2;
+    const maxBarH = eqBase - eqCeil;
+    const barW    = W / BAR_COUNT;
+    const barGap  = Math.max(1, barW * 0.55);
+
+    ctx.save();
+
+    // ── Atualiza barras e spawna brasas (sem desenhar ainda) ──
+    for(let i = 0; i < BAR_COUNT; i++){
+      let target = 0;
+      if(freqData){
+        // Distribuição linear simples: cobre todo o espectro uniformemente
+        // Usa só os primeiros 60% dos bins (acima disso é ruído de alta freq)
+        const usableBins = Math.floor(freqData.length * 0.6);
+        const binStart = Math.floor((i / BAR_COUNT) * usableBins);
+        const binEnd   = Math.max(binStart+1, Math.floor(((i+1) / BAR_COUNT) * usableBins));
+        let sum = 0;
+        for(let b = binStart; b < binEnd; b++) sum += freqData[b];
+        target = (sum / (binEnd - binStart)) / 255;
+      } else {
+        target = 0.3 + Math.sin(now*0.003 + i*0.4)*0.25 + Math.sin(now*0.007 + i*0.9)*0.15;
+        target = Math.max(0, Math.min(1, target));
+      }
+
+      const prev = eqBars[i];
+      if(target > eqBars[i]) eqBars[i] += (target - eqBars[i]) * 0.75;
+      else                    eqBars[i] += (target - eqBars[i]) * 0.07;
+
+      const v    = eqBars[i];
+      const vVis = Math.pow(v, 0.6);
+      const barH = vVis * maxBarH;
+      if(barH < 2) continue;
+
+      const xLeft = i * barW + barGap * 0.5;
+      const xRight = xLeft + (barW - barGap);
+      const xMid  = (xLeft + xRight) * 0.5;
+      const yTip  = eqBase - barH;
+
+      // Spawna brasas das pontas — qualquer barra razoavelmente ativa
+      if(v > 0.3 && eqEmbers.length < 200 && Math.random() < v * 0.35){
+        const count = v > 0.7 ? 2 : 1;
+        for(let c = 0; c < count; c++){
+          const life = 350 + Math.random()*700;
+          eqEmbers.push({
+            x: xMid + (Math.random()-0.5)*(barW-barGap)*0.8,
+            y: yTip + Math.random()*4,
+            vx: (Math.random()-0.5)*1.2,
+            vy: -(0.4 + Math.random()*2.0),
+            r:  0.5 + Math.random()*1.5,
+            life, maxLife: life,
+            hot: v > 0.65,
+          });
+        }
+      }
+
+      // Pico brilhante quando espinho sobe rápido
+      if(eqBars[i] > prev + 0.04){
+        const life = 120 + Math.random()*80;
+        eqEmbers.push({ x:xMid, y:yTip, vx:(Math.random()-0.5)*0.4, vy:-(1.5+Math.random()*1.5),
+          r: 1.5+Math.random()*1.5, life, maxLife:life, hot:true });
+      }
+    }
+
+    // ── Desenha barras ──
+    for(let i = 0; i < BAR_COUNT; i++){
+      const v    = eqBars[i];
+      const vVis = Math.pow(v, 0.6);
+      const barH = vVis * maxBarH;
+      if(barH < 2) continue;
+
+      const xLeft  = i * barW + barGap * 0.5;
+      const xRight = xLeft + (barW - barGap);
+      const xMid   = (xLeft + xRight) * 0.5;
+      const yTip   = eqBase - barH;
+      const bW     = xRight - xLeft;
+
+      const grad = ctx.createLinearGradient(xMid, eqBase, xMid, yTip);
+      grad.addColorStop(0,   `rgba(80,0,0,0.06)`);
+      grad.addColorStop(0.5, `rgba(200,0,0,${0.10 + v*0.08})`);
+      grad.addColorStop(1,   `rgba(255,${Math.round(v*60)},0,${0.15 + v*0.10})`);
+
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = grad;
+      ctx.fillRect(xLeft, yTip, bW, barH);
+
+      // Borda lateral brilhante (esquerda)
+      ctx.globalAlpha = 0.18 + v*0.12;
+      ctx.strokeStyle = `rgba(255,${Math.round(v*100)},0,0.5)`;
+      ctx.lineWidth = 0.8;
+      ctx.beginPath();
+      ctx.moveTo(xLeft, eqBase);
+      ctx.lineTo(xLeft, yTip);
+      ctx.stroke();
+
+      // Highlight no topo da barra
+      ctx.globalAlpha = 0.22 + v*0.18;
+      ctx.strokeStyle = `rgba(255,${Math.round(v*80)},0,0.6)`;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(xLeft, yTip);
+      ctx.lineTo(xRight, yTip);
+      ctx.stroke();
+
+      // Glow no topo das barras mais altas
+      if(v > 0.55){
+        ctx.save();
+        ctx.globalAlpha = (v - 0.55) * 0.7;
+        ctx.shadowColor = `rgb(255,${Math.round(v*80)},0)`;
+        ctx.shadowBlur  = 8 + v * 10;
+        ctx.fillStyle   = `rgba(255,${Math.round(v*60)},0,0.5)`;
+        ctx.fillRect(xLeft, yTip, bW, 2);
+        ctx.restore();
+      }
+
+      // Reflexo invertido sutil
+      ctx.globalAlpha = 0.02 * vVis;
+      ctx.fillStyle = `rgb(160,0,0)`;
+      ctx.fillRect(xLeft, eqBase, bW, barH * 0.12);
+    }
+
+    // ── Desenha brasas (na frente dos espinhos) ──
+    for(let e = eqEmbers.length - 1; e >= 0; e--){
+      const em = eqEmbers[e];
+      em.life -= dt;
+      em.x += em.vx;
+      em.y += em.vy;
+      em.vy -= 0.05; // sobe com aceleração
+      em.vx += (Math.random()-0.5)*0.1;
+      if(em.life <= 0){ eqEmbers.splice(e,1); continue; }
+      const t = em.life / em.maxLife;
+      ctx.globalAlpha = t * 0.85;
+      // Cor: começa branco-laranja quente, esfria para vermelho
+      const rr = 255;
+      const gg = em.hot ? Math.round(100 + t*140) : Math.round(t*60);
+      const bb = em.hot ? Math.round(t*30) : 0;
+      ctx.fillStyle = `rgb(${rr},${gg},${bb})`;
+      // Brilho nas brasas quentes
+      if(em.hot && t > 0.5){
+        ctx.save();
+        ctx.shadowColor = `rgb(255,180,0)`;
+        ctx.shadowBlur  = 6;
+        ctx.beginPath(); ctx.arc(em.x, em.y, em.r, 0, Math.PI*2); ctx.fill();
+        ctx.restore();
+      } else {
+        ctx.beginPath(); ctx.arc(em.x, em.y, em.r, 0, Math.PI*2); ctx.fill();
+      }
+    }
+
+    // Linha de base com glow
+    ctx.globalAlpha = 0.18;
+    ctx.strokeStyle = `rgb(220,20,0)`;
+    ctx.lineWidth = 1.5;
+    ctx.shadowColor = `rgb(255,80,0)`;
+    ctx.shadowBlur = 12;
+    ctx.beginPath();
+    ctx.moveTo(0, eqBase);
+    ctx.lineTo(W, eqBase);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    ctx.globalAlpha = 1;
+    ctx.restore();
+  }
   // ── Camera shake translate ──
   const _shakeApplied = (cameraShakeX !== 0 || cameraShakeY !== 0);
   if(_shakeApplied){
@@ -1391,12 +1631,13 @@ function draw(dt){
   for(let x=DX;x<=DX+DUNGEON_SIZE;x+=TILE){ctx.beginPath();ctx.moveTo(x,DY);ctx.lineTo(x,DY+DUNGEON_SIZE);ctx.stroke();}
   for(let y=DY;y<=DY+DUNGEON_SIZE;y+=TILE){ctx.beginPath();ctx.moveTo(DX,y);ctx.lineTo(DX+DUNGEON_SIZE,y);ctx.stroke();}
 
-  // ── Scanlines sutis ──
+  // ── Scanlines sutis (vermelhas na dungeon vermelha) ──
   if(fancyEffects){
     ctx.save();
     ctx.beginPath();ctx.rect(DX,DY,DUNGEON_SIZE,DUNGEON_SIZE);ctx.clip();
+    const isRed = def.theme === 'red';
     for(let sy=DY;sy<=DY+DUNGEON_SIZE;sy+=4){
-      ctx.fillStyle='rgba(0,0,0,0.055)';
+      ctx.fillStyle = isRed ? 'rgba(80,0,0,0.06)' : 'rgba(0,0,0,0.055)';
       ctx.fillRect(DX,sy,DUNGEON_SIZE,2);
     }
     ctx.restore();
@@ -1428,7 +1669,11 @@ function draw(dt){
     const VDIAG=Math.hypot(W,H);
     const vgrd=ctx.createRadialGradient(W/2,H/2,VDIAG*0.28,W/2,H/2,VDIAG*0.62);
     vgrd.addColorStop(0,'rgba(0,0,0,0)');
-    vgrd.addColorStop(1,`rgba(0,0,0,${vAlpha})`);
+    if(def.theme === 'red'){
+      vgrd.addColorStop(1,`rgba(30,0,0,${vAlpha + 0.1})`);
+    } else {
+      vgrd.addColorStop(1,`rgba(0,0,0,${vAlpha})`);
+    }
     ctx.fillStyle=vgrd;ctx.fillRect(0,0,W,H);
 
     // ── Partículas ambientes clipadas à dungeon ──
@@ -3046,59 +3291,6 @@ function draw(dt){
     ctx.fillRect(0, H - pad, W, pad);
     ctx.fillRect(0, 0, pad, H);
     ctx.fillRect(W - pad, 0, pad, H);
-  }
-
-  // ── Equalizador vermelho (só na dungeon vermelha) ──
-  if(def && def.theme === 'red'){
-    if(!draw._eqBars) draw._eqBars = new Float32Array(48).fill(0);
-    const eqBars = draw._eqBars;
-    const BAR_COUNT = eqBars.length;
-    const freqData = Audio.getRedFreqData ? Audio.getRedFreqData() : null;
-
-    const eqBottom = H - HUD_RESERVE;
-    const eqTop    = DY + DUNGEON_SIZE;
-    const eqHeight = eqBottom - eqTop;
-
-    const barW   = W / BAR_COUNT;
-    const barGap = Math.max(1, barW * 0.15);
-
-    ctx.save();
-    for(let i = 0; i < BAR_COUNT; i++){
-      let target = 0;
-      if(freqData){
-        const t0 = Math.pow(i / BAR_COUNT, 1.8);
-        const t1 = Math.pow((i + 1) / BAR_COUNT, 1.8);
-        const binStart = Math.floor(t0 * freqData.length * 0.7);
-        const binEnd   = Math.max(binStart + 1, Math.floor(t1 * freqData.length * 0.7));
-        let sum = 0;
-        for(let b = binStart; b < binEnd; b++) sum += freqData[b];
-        target = (sum / (binEnd - binStart)) / 255;
-      }
-
-      if(target > eqBars[i]) eqBars[i] += (target - eqBars[i]) * 0.7;
-      else                    eqBars[i] += (target - eqBars[i]) * 0.10;
-
-      const barH = eqBars[i] * eqHeight;
-      if(barH < 1) continue;
-
-      const x = i * barW + barGap * 0.5;
-      const w = barW - barGap;
-      const y = eqBottom - barH;
-      const v = eqBars[i];
-
-      // Cor: vai de vermelho escuro (base) a vermelho vivo (topo)
-      const r = Math.round(60 + v * 170);
-      const g = Math.round(v * 6);
-      ctx.globalAlpha = 0.45 + v * 0.45;
-      ctx.fillStyle = `rgb(${r},${g},0)`;
-      ctx.fillRect(x, y, w, barH);
-
-      // Reflexo
-      ctx.globalAlpha = 0.07 * v;
-      ctx.fillRect(x, eqBottom, w, barH * 0.25);
-    }
-    ctx.globalAlpha = 1;
-    ctx.restore();
   }
 
   // ── GLITCH FURY: Overlay vermelho pulsante com vinheta (fora do shake) ──
