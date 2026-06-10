@@ -296,11 +296,12 @@ const Audio = (() => {
   // ── MÚSICAS DE DUNGEON POR TEMA ───────────────────────────────
   // Fábrica para criar um sistema de música idêntico ao principal,
   // mas apontando para um arquivo diferente.
-  function _makeDungeonMusicSystem(file, vol) {
+  function _makeDungeonMusicSystem(file, vol, onGainReady) {
     const TARGET_VOL = vol !== undefined ? vol : 0.55;
     let buf = null, rawBuf = null, src = null, gainNode = null;
     let loaded = false, playing = false, pending = false;
     let offset = 0, startedAt = 0;
+    let _gainHooked = false;
 
     function _load() {
       if (loaded) return;
@@ -326,6 +327,7 @@ const Audio = (() => {
         gainNode = ctx.createGain();
         gainNode.gain.value = 0;
         gainNode.connect(masterGain);
+        if (onGainReady && !_gainHooked) { _gainHooked = true; onGainReady(gainNode); }
       }
       src = ctx.createBufferSource();
       src.buffer = buf;
@@ -380,8 +382,62 @@ const Audio = (() => {
     return { play, stop, pause, resume, isPlaying, _decodeWhenReady };
   }
 
+  // ── BEAT PULSE: Analyser para capturar o ritmo da música vermelha ──
+  let _redAnalyser = null;
+  let _redAnalyserData = null;
+  let _redBeatSmooth = 0;
+  let _redBeatBaseline = 0.3; // média dinâmica do nível de bass — para normalizar
+
+  // Chamado quando o gainNode da música vermelha é criado (dentro de play())
+  // Insere o analyser entre o gainNode e o masterGain
+  function _hookRedAnalyser(gainNode) {
+    if (!ctx) return;
+    if (!_redAnalyser) {
+      _redAnalyser = ctx.createAnalyser();
+      _redAnalyser.fftSize = 1024;
+      _redAnalyser.smoothingTimeConstant = 0.5; // menos suavização → responde mais rápido
+      _redAnalyserData = new Uint8Array(_redAnalyser.frequencyBinCount);
+    }
+    // Re-roteia: gainNode → analyser → masterGain
+    try { gainNode.disconnect(); } catch(e) {}
+    gainNode.connect(_redAnalyser);
+    _redAnalyser.connect(masterGain);
+  }
+
+  function getRedBeatPulse() {
+    if (!_redAnalyser || !_redAnalyserData) return 0;
+    _redAnalyser.getByteFrequencyData(_redAnalyserData);
+    // bins 0-5 com fftSize=1024, sr=44100: bin width≈43Hz → cobre sub-bass/kick até ~258Hz
+    let bassSum = 0;
+    const bassEnd = 6;
+    for (let i = 0; i < bassEnd; i++) bassSum += _redAnalyserData[i];
+    const bassAvg = bassSum / (bassEnd * 255);
+
+    // Atualiza baseline lentamente (média de longo prazo da música)
+    _redBeatBaseline += (bassAvg - _redBeatBaseline) * 0.004;
+
+    // Normaliza em relação à baseline: valor acima da média vira o pulso
+    const above = Math.max(0, bassAvg - _redBeatBaseline);
+    const normalized = above / Math.max(0.05, _redBeatBaseline); // 0..~1
+
+    // Envelope: sobe rápido, desce rápido — para piscar com a batida
+    if (normalized > _redBeatSmooth) {
+      _redBeatSmooth += (normalized - _redBeatSmooth) * 0.75; // sobe rápido
+    } else {
+      _redBeatSmooth += (normalized - _redBeatSmooth) * 0.18; // desce mais rápido que antes
+    }
+    return Math.min(1, _redBeatSmooth);
+  }
+
+  function getRedFreqData() {
+    if (!_redAnalyser || !_redAnalyserData) return null;
+    _redAnalyser.getByteFrequencyData(_redAnalyserData);
+    return _redAnalyserData;
+  }
+  // ─────────────────────────────────────────────────────────────
+
   const _greenMusic = _makeDungeonMusicSystem('./assets/audio/green_dungeon_music.ogg', 0.75);
-  const _redMusic   = _makeDungeonMusicSystem('./assets/audio/red_dungeon_music.ogg',   0.75);
+  const _redMusic   = _makeDungeonMusicSystem('./assets/audio/red_dungeon_music.ogg',   0.75, _hookRedAnalyser);
   const _blackMusic = _makeDungeonMusicSystem('./assets/audio/black_dungeon_music.ogg', 0.75);
 
   // Qual sistema de música está tocando agora (blue = o principal _musicSource)
@@ -1017,6 +1073,23 @@ const Audio = (() => {
   }
   function isMuted() { return muted; }
 
+  function setVolume(vol) {
+    masterVol = Math.max(0, Math.min(1, vol));
+    muted = masterVol === 0;
+    if (masterGain) masterGain.gain.value = masterVol;
+    setMusicMuted(muted);
+    try { localStorage.setItem('bk_volume', masterVol); } catch(e) {}
+  }
+  function getVolume() { return masterVol; }
+
+  // Restaura volume salvo ao inicializar
+  (function() {
+    try {
+      const saved = localStorage.getItem('bk_volume');
+      if (saved !== null) { masterVol = parseFloat(saved); muted = masterVol === 0; }
+    } catch(e) {}
+  })();
+
   // Inicializa no primeiro gesto do usuário
   document.addEventListener('click', () => { init(); resume(); }, { once: false });
   document.addEventListener('keydown', () => { init(); resume(); }, { once: false });
@@ -1045,7 +1118,7 @@ const Audio = (() => {
     sniperReload, sniperShot,
     menuHover, menuClick, menuError,
     init, resume,
-    coinReal, toggleMute, isMuted,
+    coinReal, toggleMute, isMuted, setVolume, getVolume,
     playMusic, stopMusic, pauseMusic, resumeMusic,
     playDungeonMusic, stopDungeonMusic, pauseDungeonMusic, resumeDungeonMusic,
     playBuffMusic, stopBuffMusic,
@@ -1054,6 +1127,8 @@ const Audio = (() => {
     playShopMusic, stopShopMusic,
     playTrickyMusic, stopTrickyMusic, fadeTrickyMusicOut,
     pauseTrickyMusic, resumeTrickyMusic,
+    getRedBeatPulse,
+    getRedFreqData,
   };
 })();
 
