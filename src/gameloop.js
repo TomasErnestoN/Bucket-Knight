@@ -1,5 +1,6 @@
 function gameLoop(ts){
   const dt=Math.min(ts-lastTime,50);lastTime=ts;
+  if(gameStarted && !paused) dungeonTime += dt * 0.001;
   // Glitch fury: congelamento durante ativação (darkening + await click + scream)
   const glitchFuryFrozen = glitchFuryDarkening || glitchFuryAwaitClick || (glitchFuryScreamTimer > 0);
   if(gameStarted && !gameOver && !paused){
@@ -1227,12 +1228,128 @@ function drawTransition(def, nextDef){
   ctx.restore();
 }
 
+
+// ── Toggle de efeitos visuais ──────────────────────────────────
+let fancyEffects = (()=>{ try{ return localStorage.getItem('bk_effects')!=='0'; }catch(e){ return true; } })();
+function setFancyEffects(v){ fancyEffects=v; try{ localStorage.setItem('bk_effects',v?'1':'0'); }catch(e){} updatePauseEffectsLabel(); if(typeof updateOptionsEffectsLabel==='function') updateOptionsEffectsLabel(); }
+function toggleFancyEffects(){ setFancyEffects(!fancyEffects); }
+function updatePauseEffectsLabel(){
+  const btn=document.getElementById('pause-effects-btn');
+  if(!btn) return;
+  btn.textContent = fancyEffects ? '✦ Efeitos: LIGADO' : '✧ Efeitos: DESLIGADO';
+  btn.style.opacity = fancyEffects ? '1' : '0.55';
+}
+
+function drawDungeonBackground(def) {
+  const theme = def.theme;
+  const DIAG = Math.hypot(W, H);
+
+  if (theme === 'blue') {
+    ctx.fillStyle = '#04040e'; ctx.fillRect(0,0,W,H);
+    const bg = ctx.createRadialGradient(W*0.5, H*0.42, 0, W*0.5, H*0.5, DIAG*0.6);
+    bg.addColorStop(0, '#0c0c28'); bg.addColorStop(1, '#04040e');
+    ctx.fillStyle = bg; ctx.fillRect(0,0,W,H);
+    if(!fancyEffects) return;
+    const GRID=52, pulse2=0.4+0.15*Math.sin(dungeonTime*1.1);
+    for(let gx=0;gx<=W;gx+=GRID){ for(let gy=0;gy<=H;gy+=GRID){
+      const wave=0.5+0.5*Math.sin(dungeonTime*0.9-Math.hypot(gx-W/2,gy-H/2)*0.012);
+      ctx.globalAlpha=pulse2*wave*0.35; ctx.fillStyle='#3355aa';
+      ctx.beginPath();ctx.arc(gx,gy,1.1,0,Math.PI*2);ctx.fill();
+    }}
+    ctx.globalAlpha=1;
+
+  } else if (theme === 'green') {
+    ctx.fillStyle = '#020602'; ctx.fillRect(0,0,W,H);
+    const bg = ctx.createRadialGradient(W*0.5,H*0.55,0,W*0.5,H*0.5,DIAG*0.6);
+    bg.addColorStop(0,'#070f08'); bg.addColorStop(1,'#020602');
+    ctx.fillStyle=bg; ctx.fillRect(0,0,W,H);
+    if(!fancyEffects) return;
+    for(let i=0;i<5;i++){
+      const nx=W*(0.1+i*0.2)+Math.sin(dungeonTime*0.3+i*1.7)*40;
+      const ny=H*(0.2+i*0.14)+Math.cos(dungeonTime*0.25+i*1.1)*28;
+      const nr=80+i*30+Math.sin(dungeonTime*0.5+i)*20;
+      const ng=ctx.createRadialGradient(nx,ny,0,nx,ny,nr);
+      ng.addColorStop(0,`rgba(20,80,35,${0.12+0.04*Math.sin(dungeonTime+i)})`); ng.addColorStop(1,'rgba(0,0,0,0)');
+      ctx.fillStyle=ng; ctx.fillRect(nx-nr,ny-nr,nr*2,nr*2);
+    }
+    const lineAlpha=0.07+0.03*Math.sin(dungeonTime*0.6);
+    for(let ly=0;ly<H;ly+=18){
+      ctx.globalAlpha=lineAlpha*(0.5+0.5*Math.sin(ly*0.08+dungeonTime*0.3));
+      ctx.fillStyle='#226633'; ctx.fillRect(0,ly,W,1);
+    }
+    ctx.globalAlpha=1;
+    const pg=ctx.createRadialGradient(W/2,H*0.8,0,W/2,H*0.8,H*0.5);
+    pg.addColorStop(0,`rgba(30,100,50,${0.08+0.04*Math.sin(dungeonTime*1.3)})`); pg.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.fillStyle=pg; ctx.fillRect(0,0,W,H);
+
+  } else if (theme === 'red') {
+    ctx.fillStyle='#060101'; ctx.fillRect(0,0,W,H);
+    const bg=ctx.createRadialGradient(W*0.5,H*0.6,0,W*0.5,H*0.5,DIAG*0.6);
+    bg.addColorStop(0,'#160404'); bg.addColorStop(1,'#060101');
+    ctx.fillStyle=bg; ctx.fillRect(0,0,W,H);
+
+    if(!fancyEffects) return;
+
+    const heat=0.06+0.04*Math.sin(dungeonTime*2.1);
+    const hg=ctx.createRadialGradient(W/2,H*0.65,0,W/2,H*0.65,DIAG*0.4);
+    hg.addColorStop(0,`rgba(160,20,10,${heat})`); hg.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.fillStyle=hg; ctx.fillRect(0,0,W,H);
+
+    for(let i=0;i<3;i++){
+      const wy=H*(0.5+i*0.17)+Math.sin(dungeonTime*1.1+i*2.2)*22;
+      const wa=0.04+0.02*Math.sin(dungeonTime*1.5+i);
+      const wg=ctx.createLinearGradient(0,wy-25,0,wy+25);
+      wg.addColorStop(0,'rgba(180,30,10,0)'); wg.addColorStop(0.5,`rgba(180,30,10,${wa})`); wg.addColorStop(1,'rgba(180,30,10,0)');
+      ctx.fillStyle=wg; ctx.fillRect(0,wy-25,W,50);
+    }
+    ambientParticles.slice(0,8).forEach(p=>{
+      if(p.life>0){
+        const fade=Math.sin(p.life*Math.PI); ctx.save(); ctx.globalAlpha=0.18*fade;
+        const eg=ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,p.r*3);
+        eg.addColorStop(0,'rgba(255,160,40,1)'); eg.addColorStop(1,'rgba(255,50,10,0)');
+        ctx.fillStyle=eg; ctx.beginPath();ctx.arc(p.x,p.y,p.r*3,0,Math.PI*2);ctx.fill(); ctx.restore();
+      }
+    });
+
+  } else if (theme === 'black') {
+    ctx.fillStyle='#010002'; ctx.fillRect(0,0,W,H);
+    const bg=ctx.createRadialGradient(W*0.5,H*0.45,0,W*0.5,H*0.5,DIAG*0.6);
+    bg.addColorStop(0,'#0a0410'); bg.addColorStop(1,'#010002');
+    ctx.fillStyle=bg; ctx.fillRect(0,0,W,H);
+    if(!fancyEffects) return;
+    if(!drawDungeonBackground._stars){
+      drawDungeonBackground._stars=Array.from({length:60},(_,i)=>({
+        x:((i*137.5)%1)*W, y:((i*97.3+13)%1)*H,
+        r:0.4+((i*31)%10)*0.18, phase:(i*0.7)%(Math.PI*2),
+      }));
+    }
+    drawDungeonBackground._stars.forEach(s=>{
+      ctx.globalAlpha=0.2+0.15*Math.sin(dungeonTime*0.8+s.phase);
+      ctx.fillStyle='#cc88ff'; ctx.beginPath();ctx.arc(s.x,s.y,s.r,0,Math.PI*2);ctx.fill();
+    });
+    ctx.globalAlpha=1;
+    for(let i=0;i<4;i++){
+      const oy=H*(0.18+i*0.2)+Math.sin(dungeonTime*0.5+i*1.6)*30;
+      const oa=0.04+0.025*Math.sin(dungeonTime*1.2+i*0.9);
+      const og=ctx.createLinearGradient(0,oy-40,0,oy+40);
+      og.addColorStop(0,'rgba(100,20,180,0)'); og.addColorStop(0.5,`rgba(100,20,180,${oa})`); og.addColorStop(1,'rgba(100,20,180,0)');
+      ctx.fillStyle=og; ctx.fillRect(0,oy-40,W,80);
+    }
+    const vg=ctx.createRadialGradient(W/2,H/2,0,W/2,H/2,DIAG*0.3);
+    vg.addColorStop(0,`rgba(60,0,100,${0.12+0.06*Math.sin(dungeonTime*0.7)})`); vg.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.fillStyle=vg; ctx.fillRect(0,0,W,H);
+  } else {
+    ctx.fillStyle='#06060e'; ctx.fillRect(0,0,W,H);
+  }
+  ctx.globalAlpha=1;
+}
+
 function draw(dt){
   const def=DUNGEON_DEFS[currentDungeon];
   const nextDef=DUNGEON_DEFS[Math.min(currentDungeon+1,DUNGEON_DEFS.length-1)];
   ctx.clearRect(0,0,W,H);
   ctx.setTransform(1,0,0,1,0,0); // garante transform limpo a cada frame
-  ctx.fillStyle='#06060e';ctx.fillRect(0,0,W,H);
+  drawDungeonBackground(def);
   // ── Camera shake translate ──
   const _shakeApplied = (cameraShakeX !== 0 || cameraShakeY !== 0);
   if(_shakeApplied){
@@ -1273,11 +1390,67 @@ function draw(dt){
   const TILE=40;
   for(let x=DX;x<=DX+DUNGEON_SIZE;x+=TILE){ctx.beginPath();ctx.moveTo(x,DY);ctx.lineTo(x,DY+DUNGEON_SIZE);ctx.stroke();}
   for(let y=DY;y<=DY+DUNGEON_SIZE;y+=TILE){ctx.beginPath();ctx.moveTo(DX,y);ctx.lineTo(DX+DUNGEON_SIZE,y);ctx.stroke();}
+
+  // ── Scanlines sutis ──
+  if(fancyEffects){
+    ctx.save();
+    ctx.beginPath();ctx.rect(DX,DY,DUNGEON_SIZE,DUNGEON_SIZE);ctx.clip();
+    for(let sy=DY;sy<=DY+DUNGEON_SIZE;sy+=4){
+      ctx.fillStyle='rgba(0,0,0,0.055)';
+      ctx.fillRect(DX,sy,DUNGEON_SIZE,2);
+    }
+    ctx.restore();
+  }
+
+  // ── Glow pulsante nas bordas da dungeon ──
+  const pulse=fancyEffects ? 0.7+0.3*Math.sin(dungeonTime*1.8) : 1.0;
+  ctx.shadowColor=def.glowColor;ctx.shadowBlur=16*pulse;
   ctx.strokeStyle=def.wallColor;ctx.lineWidth=4;ctx.strokeRect(DX,DY,DUNGEON_SIZE,DUNGEON_SIZE);
-  ctx.shadowColor=def.glowColor;ctx.shadowBlur=12;
+  ctx.shadowBlur=20*pulse;
   ctx.strokeStyle=def.color;ctx.lineWidth=1.5;ctx.strokeRect(DX+6,DY+6,DUNGEON_SIZE-12,DUNGEON_SIZE-12);
   ctx.shadowBlur=0;
   [[DX,DY],[DX+DUNGEON_SIZE,DY],[DX,DY+DUNGEON_SIZE],[DX+DUNGEON_SIZE,DY+DUNGEON_SIZE]].forEach(([cx,cy])=>{ctx.fillStyle=def.wallColor;ctx.fillRect(cx-8,cy-8,16,16);});
+
+  if(fancyEffects){
+    // ── Corner glows ──
+    ctx.save();
+    [[DX,DY],[DX+DUNGEON_SIZE,DY],[DX,DY+DUNGEON_SIZE],[DX+DUNGEON_SIZE,DY+DUNGEON_SIZE]].forEach(([cx,cy])=>{
+      const cg=ctx.createRadialGradient(cx,cy,0,cx,cy,70);
+      cg.addColorStop(0,def.glowColor.replace(/^#([0-9a-f]{6})$/i,(_,h)=>`rgba(${parseInt(h.slice(0,2),16)},${parseInt(h.slice(2,4),16)},${parseInt(h.slice(4,6),16)},${0.22*pulse})`));
+      cg.addColorStop(1,'rgba(0,0,0,0)');
+      ctx.fillStyle=cg;
+      ctx.beginPath();ctx.arc(cx,cy,70,0,Math.PI*2);ctx.fill();
+    });
+    ctx.restore();
+
+    // ── Vinheta sobre o canvas inteiro (bordas escuras pulsando) ──
+    const vAlpha=0.38+0.08*Math.sin(dungeonTime*0.9);
+    const VDIAG=Math.hypot(W,H);
+    const vgrd=ctx.createRadialGradient(W/2,H/2,VDIAG*0.28,W/2,H/2,VDIAG*0.62);
+    vgrd.addColorStop(0,'rgba(0,0,0,0)');
+    vgrd.addColorStop(1,`rgba(0,0,0,${vAlpha})`);
+    ctx.fillStyle=vgrd;ctx.fillRect(0,0,W,H);
+
+    // ── Partículas ambientes clipadas à dungeon ──
+    ctx.save();
+    ctx.beginPath();ctx.rect(DX,DY,DUNGEON_SIZE,DUNGEON_SIZE);ctx.clip();
+    ambientParticles.forEach(p=>{
+      if(p.life===0||p.x===0){resetAmbientParticle(p,DX,DY,DUNGEON_SIZE);}
+      p.life+=dt*0.00045;
+      p.x+=p.vx+(Math.sin(dungeonTime*1.2+p.wobble)*0.15);
+      p.y+=p.vy;
+      p.wobble+=0.03;
+      if(p.life>1||p.y<DY-10){resetAmbientParticle(p,DX,DY,DUNGEON_SIZE);}
+      const fade=Math.sin(p.life*Math.PI);
+      ctx.save();
+      ctx.globalAlpha=p.alpha*fade;
+      ctx.shadowColor=def.glowColor;ctx.shadowBlur=p.r*6;
+      ctx.fillStyle=def.color;
+      ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);ctx.fill();
+      ctx.shadowBlur=0;ctx.restore();
+    });
+    ctx.restore();
+  }
 
   // Blast wave
   if(blastWave){
@@ -2875,6 +3048,59 @@ function draw(dt){
     ctx.fillRect(W - pad, 0, pad, H);
   }
 
+  // ── Equalizador vermelho (só na dungeon vermelha) ──
+  if(def && def.theme === 'red'){
+    if(!draw._eqBars) draw._eqBars = new Float32Array(48).fill(0);
+    const eqBars = draw._eqBars;
+    const BAR_COUNT = eqBars.length;
+    const freqData = Audio.getRedFreqData ? Audio.getRedFreqData() : null;
+
+    const eqBottom = H - HUD_RESERVE;
+    const eqTop    = DY + DUNGEON_SIZE;
+    const eqHeight = eqBottom - eqTop;
+
+    const barW   = W / BAR_COUNT;
+    const barGap = Math.max(1, barW * 0.15);
+
+    ctx.save();
+    for(let i = 0; i < BAR_COUNT; i++){
+      let target = 0;
+      if(freqData){
+        const t0 = Math.pow(i / BAR_COUNT, 1.8);
+        const t1 = Math.pow((i + 1) / BAR_COUNT, 1.8);
+        const binStart = Math.floor(t0 * freqData.length * 0.7);
+        const binEnd   = Math.max(binStart + 1, Math.floor(t1 * freqData.length * 0.7));
+        let sum = 0;
+        for(let b = binStart; b < binEnd; b++) sum += freqData[b];
+        target = (sum / (binEnd - binStart)) / 255;
+      }
+
+      if(target > eqBars[i]) eqBars[i] += (target - eqBars[i]) * 0.7;
+      else                    eqBars[i] += (target - eqBars[i]) * 0.10;
+
+      const barH = eqBars[i] * eqHeight;
+      if(barH < 1) continue;
+
+      const x = i * barW + barGap * 0.5;
+      const w = barW - barGap;
+      const y = eqBottom - barH;
+      const v = eqBars[i];
+
+      // Cor: vai de vermelho escuro (base) a vermelho vivo (topo)
+      const r = Math.round(60 + v * 170);
+      const g = Math.round(v * 6);
+      ctx.globalAlpha = 0.45 + v * 0.45;
+      ctx.fillStyle = `rgb(${r},${g},0)`;
+      ctx.fillRect(x, y, w, barH);
+
+      // Reflexo
+      ctx.globalAlpha = 0.07 * v;
+      ctx.fillRect(x, eqBottom, w, barH * 0.25);
+    }
+    ctx.globalAlpha = 1;
+    ctx.restore();
+  }
+
   // ── GLITCH FURY: Overlay vermelho pulsante com vinheta (fora do shake) ──
   if(glitchFuryActive){
     ctx.save();
@@ -2898,8 +3124,15 @@ function draw(dt){
   }
 }
 
+let debuggerActive = (()=>{ try{ return localStorage.getItem('bk_debugger')==='1'; }catch(e){ return false; } })();
+function setDebuggerActive(v){ debuggerActive=v; try{ localStorage.setItem('bk_debugger',v?'1':'0'); }catch(e){} }
+
 function showPauseScreen() {
   updatePauseSoundLabel();
+  updatePauseEffectsLabel();
+  // Mostrar botão debug só se modo debugger estiver ativo
+  const dbgBtn = document.getElementById('pause-debug-btn');
+  if(dbgBtn) dbgBtn.style.display = debuggerActive ? 'block' : 'none';
   document.getElementById('pause-screen').style.display = 'flex';
   Audio.pauseDungeonMusic();
   if(typeof Audio.pauseTrickyMusic === 'function') Audio.pauseTrickyMusic();
@@ -2934,6 +3167,74 @@ function pauseBackToMenu() {
   Audio.stopDungeonMusic(false);
   if(typeof Audio !== 'undefined' && Audio.playLobbyMusic) Audio.playLobbyMusic();
   restartGame();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// TELA DE DEBUG
+// ═══════════════════════════════════════════════════════════════
+function openDebugScreen() {
+  if(!gameStarted || gameOver || transitioning || buffScreenActive) return;
+  hidePauseScreen();
+  // Reseta o grid colapsado
+  const grid = document.getElementById('debug-dungeon-grid');
+  grid.innerHTML = '';
+  grid.style.display = 'none';
+  const toggleBtn = document.getElementById('debug-phase-toggle');
+  if(toggleBtn) { toggleBtn.textContent = '📋 SELECIONAR FASE ▾'; toggleBtn.classList.remove('open'); }
+  document.getElementById('debug-screen').classList.add('open');
+}
+
+function toggleDebugPhaseList() {
+  const grid = document.getElementById('debug-dungeon-grid');
+  const btn = document.getElementById('debug-phase-toggle');
+  const isOpen = grid.style.display === 'grid';
+  if(isOpen) {
+    grid.style.display = 'none';
+    btn.textContent = '📋 SELECIONAR FASE ▾';
+    btn.classList.remove('open');
+  } else {
+    grid.innerHTML = '';
+    DUNGEON_DEFS.forEach((def, idx) => {
+      const item = document.createElement('button');
+      item.className = 'debug-dungeon-btn' + (idx === currentDungeon ? ' current' : '');
+      item.innerHTML = `<span>${def.name}</span><span class="dbg-theme">${def.theme.toUpperCase()}</span>`;
+      item.onclick = () => debugGoToDungeon(idx);
+      grid.appendChild(item);
+    });
+    grid.style.display = 'grid';
+    btn.textContent = '📋 SELECIONAR FASE ▴';
+    btn.classList.add('open');
+  }
+}
+
+function closeDebugScreen() {
+  document.getElementById('debug-screen').classList.remove('open');
+  showPauseScreen();
+}
+
+function debugGoToDungeon(targetIdx) {
+  closeDebugScreen();
+
+  // Limpa todos os inimigos e timers
+  slimes=[]; blueSlimes=[]; redSlimes=[]; bombHeads=[];
+  assassinRats=[]; ghosts=[]; golems=[]; skeletons=[];
+  killCount=0; discardCount=0;
+  slimeSpawnTimer=0; bombSpawnTimer=0; ratSpawnTimer=0;
+  golemSpawnTimer=0; ghostSpawnTimer=0;
+  blueSlimeSpawnTimer=0; redSlimeSpawnTimer=0;
+  enemySpawnDelay=3000;
+  transitioning=false; transitionTimer=0;
+
+  // Posiciona currentDungeon um antes do alvo para finishDungeonTransition fazer ++
+  currentDungeon = Math.max(0, targetIdx - 1);
+
+  // Reseta player
+  player.x=W/2; player.y=H/2; player.rolling=false; player.invincible=600;
+  playerFlyY=H/2; playerFlyAlpha=1; cubeAngle=0;
+
+  // Mostra tela de buff da dungeon anterior ao alvo (simula completar a anterior)
+  const prevDungeonNum = DUNGEON_DEFS[Math.max(0, targetIdx - 1)].num;
+  showBuffScreen(prevDungeonNum);
 }
 
 document.addEventListener('keydown',e=>{
